@@ -1,5 +1,5 @@
 # harbour-commander
-Harbour Commander is an file manager for cross-platform, in the close tradition of Norton Commander. The Harbour Commander was completely written in [Harbour](https://github.com/vszakats/harbour-core) language, and is thus very fast.
+Harbour Commander is an file manager for cross-platform, in the close tradition of Norton Commander. The Harbour Commander was completely written in [Harbour 3.4](https://github.com/vszakats/harbour-core) language, and is thus very fast.
 
 ![GNU/Linux](docs/img/hc_ubuntu.png "With family Linux Ubuntu desktop, based on GNOME")
 
