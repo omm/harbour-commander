@@ -41,6 +41,8 @@ PROCEDURE Main()
 
 STATIC PROCEDURE Autosize()
 
+   Resize( aSelect_Left, 0, 0, MaxRow() - 1, MaxCol() / 2 )
+   Resize( aSelect_Right, 0, MaxCol() / 2 + 1, MaxRow() - 1, MaxCol() )
 
    RETURN
 
@@ -74,8 +76,10 @@ STATIC PROCEDURE Prompt()
          nMaxCol := MaxCol()
       ENDIF
 
+      hb_DispOutAt( nMaxRow - 1, 0, cPrompt := "$ " )
 
       GetList := { ;
+         Get():New( nMaxRow - 1, Len( cPrompt ), ;
          {| v | iif( PCount() == 0, cLine, cLine := v ) }, ;
          "cLine", ;
          "@KS" + hb_ntos( MaxCol() - Len( cPrompt ) + 1 ) ) }
@@ -137,9 +141,12 @@ STATIC PROCEDURE Panel_Display( p )
 
    DispBegin()
 
+   hb_DispBox( p[ "nTop" ], p[ "nLeft" ], p[ "nBottom"  ] - 1, p[ "nRight" ], HB_B_SINGLE_UNI + ' ' /* , 0x1f */ )
 
    i := p[ 'f' ]
+   FOR r := p[ "nTop" ] + 1 TO p[ "nBottom" ] - 1
       IF i <= Len( p[ "aArray" ] )
+         hb_DispOutAt( r, p[ "nLeft" ] + 1, PadR( p[ "aArray" ][ i ][ F_NAME ], p[ "nRight" ] - p[ "nLeft" ] - 1 ), ;
             iif( aSelected == p .AND. i == p[ 'h' ], 0xf0, NIL ) )
          ++i
       ELSE
@@ -176,6 +183,7 @@ STATIC PROCEDURE BottomBar()
    LOCAL cSpaces
    LOCAL nCol := Int( MaxCol() / 10 ) + 1
 
+   cSpaces := Space( nCol - 8 )
 
    hb_DispOutAt( nRow, 0,        " 1", 0x7 )
    hb_DispOutAt( nRow, 2,            "Help  " + cSpaces, 0x30 )
