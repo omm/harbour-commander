@@ -1,4 +1,4 @@
-# Welcome to harbour commander
+# Welcome to Harbour Commander
 
 Harbour Commander is an file manager for cross-platform. The Harbour Commander was completely written in [Harbour 3.4](https://github.com/vszakats/harbour-core) language, and is thus very fast.
 
@@ -11,3 +11,6 @@ Harbour Commander is an file manager for cross-platform. The Harbour Commander w
 
 ## Oracle Solaris
 ![Solaris](docs/img/hc_solaris.png "Solaris desktop GNOME")
+
+## macOS
+![macOS](docs/img/hc_darwin.png "Desktop Aqua in macOS")
