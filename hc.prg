@@ -41,8 +41,8 @@ PROCEDURE Main()
 
 STATIC PROCEDURE Autosize()
 
-   Resize( aPanel_Left, 0, 0, MaxRow() - 1, Int( MaxCol() / 2 ) )
-   Resize( aPanel_Right, 0, Int( MaxCol() / 2 ) + 1, MaxRow() - 1, MaxCol() )
+   Resize( aPanel_Left, 0, 0, MaxRow() -1, Int( MaxCol() / 2 ) )
+   Resize( aPanel_Right, 0, Int( MaxCol() / 2 ) + 1, MaxRow() -1, MaxCol() )
 
    RETURN
 
@@ -76,10 +76,10 @@ STATIC PROCEDURE Prompt()
          nMaxCol := MaxCol()
       ENDIF
 
-      hb_DispOutAt( nMaxRow - 1, 0, cPrompt := "$ ", 0x7 )
+      hb_DispOutAt( nMaxRow -1, 0, cPrompt := "$ ", 0x7 )
 
       GetList := { ;
-         Get():New( nMaxRow - 1, Len( cPrompt ), ;
+         Get():New( nMaxRow -1, Len( cPrompt ), ;
          {| v | iif( PCount() == 0, cLine, cLine := v ) }, ;
          "cLine", ;
          "@KS" + hb_ntos( MaxCol() - Len( cPrompt ) + 1 ) ):colorDisp( hb_NToColor( 0x7 ) ) }
@@ -94,8 +94,8 @@ STATIC PROCEDURE Prompt()
       bKeyCompletion := SetKey( K_TAB,       {|| iif( aPanel_Selected == aPanel_Left, aPanel_Selected := aPanel_Right, aPanel_Selected := aPanel_Left ), ;
          Panel_Display( aPanel_Left ), Panel_Display( aPanel_Right ) } )
       bKeyResize     := SetKey( HB_K_RESIZE, {|| lResize := .T., hb_keyPut( K_ENTER ) } )
-      bKeyUp         := SetKey( K_UP,        {|| ALert("K_UP") } )
-      bKeyDown       := SetKey( K_DOWN,      {|| ALert("K_DOWN") } )
+      bKeyUp         := SetKey( K_UP,        {|| Alert( "K_UP" ) } )
+      bKeyDown       := SetKey( K_DOWN,      {|| Alert( "K_DOWN" ) } )
 
 
       lResize := .F.
@@ -152,13 +152,13 @@ STATIC PROCEDURE Panel_Display( aPanel )
 
    DispBegin()
    SetColor( hb_NToColor( 0x1f ) )
-   hb_DispBox( aPanel[ "nTop" ], aPanel[ "nLeft" ], aPanel[ "nBottom"  ] - 1, aPanel[ "nRight" ], HB_B_SINGLE_UNI + ' ' /*, 0x1f */ )
+   hb_DispBox( aPanel[ "nTop" ], aPanel[ "nLeft" ], aPanel[ "nBottom"  ] -1, aPanel[ "nRight" ], HB_B_SINGLE_UNI + ' ' /*, 0x1f */ )
 
    i := aPanel[ "f" ]
-   FOR nRow := aPanel[ "nTop" ] + 2 TO aPanel[ "nBottom" ] - 2
+   FOR nRow := aPanel[ "nTop" ] + 2 TO aPanel[ "nBottom" ] -2
       IF i <= Len( aPanel[ "aArray" ] )
          hb_DispOutAt( nRow, aPanel[ "nLeft" ] + 1, ;
-            PadR( aPanel[ "aArray" ][ i ][ F_NAME ], aPanel[ "nRight" ] - aPanel[ "nLeft" ] - 1 ), ;
+            PadR( aPanel[ "aArray" ][ i ][ F_NAME ], aPanel[ "nRight" ] - aPanel[ "nLeft" ] -1 ), ;
             iif( aPanel_Selected == aPanel .AND. i == aPanel[ "h" ], 0x30, NIL ) )
          ++i
       ELSE
@@ -195,7 +195,7 @@ STATIC PROCEDURE BottomBar()
    LOCAL cSpaces
    LOCAL nCol := Int( MaxCol() / 10 ) + 1
 
-   cSpaces := Space( nCol - 8 )
+   cSpaces := Space( nCol -8 )
 
    hb_DispOutAt( nRow, 0,        " 1", 0x7 )
    hb_DispOutAt( nRow, 2,            "Help  " + cSpaces, 0x30 )
@@ -219,4 +219,3 @@ STATIC PROCEDURE BottomBar()
    hb_DispOutAt( nRow, nCol * 9 + 2, "Quit  " + cSpaces, 0x30 )
 
    RETURN
-
