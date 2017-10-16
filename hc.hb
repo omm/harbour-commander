@@ -76,10 +76,10 @@ STATIC PROCEDURE Prompt()
          nMaxCol := MaxCol()
       ENDIF
 
-      hb_DispOutAt( nMaxRow -1, 0, cPrompt := "$ ", 0x7 )
+      hb_DispOutAt( nMaxRow - 1, 0, cPrompt := "$ ", 0x7 )
 
       GetList := { ;
-         Get():New( nMaxRow -1, Len( cPrompt ), ;
+         Get():New( nMaxRow - 1, Len( cPrompt ), ;
          {| v | iif( PCount() == 0, cLine, cLine := v ) }, ;
          "cLine", ;
          "@KS" + hb_ntos( MaxCol() - Len( cPrompt ) + 1 ) ):colorDisp( hb_NToColor( 0x7 ) ) }
@@ -94,9 +94,8 @@ STATIC PROCEDURE Prompt()
       bKeyCompletion := SetKey( K_TAB,       {|| iif( aPanel_Selected == aPanel_Left, aPanel_Selected := aPanel_Right, aPanel_Selected := aPanel_Left ), ;
          Panel_Display( aPanel_Left ), Panel_Display( aPanel_Right ) } )
       bKeyResize     := SetKey( HB_K_RESIZE, {|| lResize := .T., hb_keyPut( K_ENTER ) } )
-      bKeyUp         := SetKey( K_UP,        {|| Alert( "K_UP" ) } )
-      bKeyDown       := SetKey( K_DOWN,      {|| Alert( "K_DOWN" ) } )
-
+      bKeyUp         := SetKey( K_UP,        {|| --aPanel_Selected[ "h" ], Panel_Display( aPanel_Selected ) } )
+      bKeyDown       := SetKey( K_DOWN,      {|| ++aPanel_Selected[ "h" ], Panel_Display( aPanel_Selected ) } )
 
       lResize := .F.
 
@@ -195,7 +194,7 @@ STATIC PROCEDURE BottomBar()
    LOCAL cSpaces
    LOCAL nCol := Int( MaxCol() / 10 ) + 1
 
-   cSpaces := Space( nCol -8 )
+   cSpaces := Space( nCol - 8 )
 
    hb_DispOutAt( nRow, 0,        " 1", 0x7 )
    hb_DispOutAt( nRow, 2,            "Help  " + cSpaces, 0x30 )
