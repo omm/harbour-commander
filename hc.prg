@@ -16,7 +16,7 @@ PROCEDURE Main()
 
    Scroll()
    Set( _SET_SCOREBOARD, .F. )
-   Set( _SET_EVENTMASK, hb_bitOr( INKEY_KEYBOARD, HB_INKEY_GTEVENT ) )
+   Set( _SET_EVENTMASK, hb_bitOr( INKEY_KEYBOARD, HB_INKEY_GTEVENT, INKEY_ALL ) )
    Set( _SET_INSERT, .T. )
 
    hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_ROWS )
@@ -30,9 +30,6 @@ PROCEDURE Main()
 
    Autosize()
 
-   Panel_Display( aPanel_Left )
-   Panel_Display( aPanel_Right )
-
    aPanel_Selected := aPanel_Left
 
    Prompt()
@@ -41,8 +38,8 @@ PROCEDURE Main()
 
 STATIC PROCEDURE Autosize()
 
-   Resize( aPanel_Left, 0, 0, MaxRow() -1, Int( MaxCol() / 2 ) )
-   Resize( aPanel_Right, 0, Int( MaxCol() / 2 ) + 1, MaxRow() -1, MaxCol() )
+   Resize( aPanel_Left, 0, 0, MaxRow() - 1, Int( MaxCol() / 2 ) )
+   Resize( aPanel_Right, 0, Int( MaxCol() / 2 ) + 1, MaxRow() - 1, MaxCol() )
 
    RETURN
 
@@ -51,7 +48,8 @@ STATIC PROCEDURE Prompt()
    LOCAL GetList
    LOCAL cLine, lResize
    LOCAL nMaxRow := 0, nMaxCol := 0
-   LOCAL bKeyIns, bKeyCompletion, bKeyResize, bKeyUp, bKeyDown
+   LOCAL bKeyEnter, bKeyIns, bKeyCompletion, bKeyResize, bKeyUp, bKeyDown, bKeyHome, bKeyEnd, ;
+      bKeyMWForward, bKeyMWBackward
    LOCAL cCommand
 
    LOCAL cPrompt
@@ -90,33 +88,111 @@ STATIC PROCEDURE Prompt()
 
       SetCursor( iif( ReadInsert(), SC_NORMAL, SC_INSERT ) )
 
-      bKeyIns        := SetKey( K_INS,       {|| SetCursor( iif( ReadInsert( ! ReadInsert() ), SC_NORMAL, SC_INSERT ) ) } )
-      bKeyCompletion := SetKey( K_TAB,       {|| iif( aPanel_Selected == aPanel_Left, aPanel_Selected := aPanel_Right, aPanel_Selected := aPanel_Left ), ;
-         Panel_Display( aPanel_Left ), Panel_Display( aPanel_Right ) } )
-      bKeyResize     := SetKey( HB_K_RESIZE, {|| lResize := .T., hb_keyPut( K_ENTER ) } )
-      bKeyUp         := SetKey( K_UP,        {|| --aPanel_Selected[ "h" ], Panel_Display( aPanel_Selected ) } )
-      bKeyDown       := SetKey( K_DOWN,      {|| ++aPanel_Selected[ "h" ], Panel_Display( aPanel_Selected ) } )
+      bKeyEnter := SetKey( K_ENTER, {||
+      ChangeDir()
+      RETURN NIL
+      } )
+
+      bKeyIns := SetKey( K_INS, {||
+      SetCursor( iif( ReadInsert( ! ReadInsert() ), SC_NORMAL, SC_INSERT ) )
+      RETURN NIL
+      } )
+
+      bKeyCompletion := SetKey( K_TAB, {||
+      IF aPanel_Selected == aPanel_Left
+         aPanel_Selected := aPanel_Right
+      ELSE
+         aPanel_Selected := aPanel_Left
+      ENDIF
+      Panel_Display( aPanel_Left )
+      Panel_Display( aPanel_Right )
+      RETURN NIL
+      } )
+
+      bKeyResize := SetKey( HB_K_RESIZE, {||
+      lResize := .T.
+      RETURN NIL
+      } )
+
+      bKeyUp := SetKey( K_UP, {||
+      IF aPanel_Selected[ "nPosition_Indicator" ] > 1
+         --aPanel_Selected[ "nPosition_Indicator" ]
+         Panel_Display( aPanel_Selected )
+      ENDIF
+      RETURN NIL
+      } )
+
+      bKeyDown := SetKey( K_DOWN, {||
+      IF aPanel_Selected[ "nPosition_Indicator" ] <= Len( aPanel_Selected[ "aArray" ] ) - 1
+         ++aPanel_Selected[ "nPosition_Indicator" ]
+         Panel_Display( aPanel_Selected )
+      ENDIF
+      RETURN NIL
+      } )
+
+      bKeyHome := SetKey( K_HOME, {||
+      aPanel_Selected[ "nPosition_Indicator" ] := 1
+      Panel_Display( aPanel_Selected )
+      RETURN NIL
+      } )
+
+      bKeyEnd := SetKey( K_END, {||
+      aPanel_Selected[ "nPosition_Indicator" ] := Len( aPanel_Selected[ "aArray" ] )
+      Panel_Display( aPanel_Selected )
+      RETURN NIL
+      } )
+
+      bKeyMWForward := SetKey( K_MWFORWARD, {||
+      IF aPanel_Selected[ "nPosition_Indicator" ] > 1
+         --aPanel_Selected[ "nPosition_Indicator" ]
+         Panel_Display( aPanel_Selected )
+      ENDIF
+      RETURN NIL
+      } )
+
+      bKeyMWBackward := SetKey( K_MWBACKWARD, {||
+      IF aPanel_Selected[ "nPosition_Indicator" ] < Len( aPanel_Selected[ "aArray" ] )
+         ++aPanel_Selected[ "nPosition_Indicator" ]
+         Panel_Display( aPanel_Selected )
+      ENDIF
+      RETURN NIL
+      } )
 
       lResize := .F.
 
       ReadModal( GetList )
 
+      SetKey( K_ENTER, bKeyEnter )
       SetKey( K_INS, bKeyIns )
       SetKey( K_TAB, bKeyCompletion )
       SetKey( HB_K_RESIZE, bKeyResize )
       SetKey( K_UP, bKeyUp )
       SetKey( K_DOWN, bKeyDown )
+      SetKey( K_HOME, bKeyHome )
+      SetKey( K_END, bKeyEnd )
+      SetKey( K_MWFORWARD, bKeyMWForward )
+      SetKey( K_MWBACKWARD, bKeyMWBackward )
 
       DO CASE
       CASE LastKey() == K_ESC
          EXIT
+      CASE LastKey() == K_ENTER
+         LOOP
       CASE LastKey() == K_TAB
          LOOP
-      CASE lResize .AND. LastKey() == K_ENTER
+      CASE LastKey() == HB_K_RESIZE
          LOOP
       CASE LastKey() == K_UP
          LOOP
       CASE LastKey() == K_DOWN
+         LOOP
+      CASE LastKey() == K_HOME
+         LOOP
+      CASE LastKey() == K_END
+         LOOP
+      CASE LastKey() == K_MWFORWARD
+         LOOP
+      CASE LastKey() == K_MWBACKWARD
          LOOP
       ENDCASE
 
@@ -151,14 +227,14 @@ STATIC PROCEDURE Panel_Display( aPanel )
 
    DispBegin()
    SetColor( hb_NToColor( 0x1f ) )
-   hb_DispBox( aPanel[ "nTop" ], aPanel[ "nLeft" ], aPanel[ "nBottom"  ] -1, aPanel[ "nRight" ], HB_B_SINGLE_UNI + ' ' /*, 0x1f */ )
+   hb_DispBox( aPanel[ "nTop" ], aPanel[ "nLeft" ], aPanel[ "nBottom"  ] - 1, aPanel[ "nRight" ], HB_B_SINGLE_UNI + ' ' /*, 0x1f */ )
 
    i := aPanel[ "f" ]
-   FOR nRow := aPanel[ "nTop" ] + 2 TO aPanel[ "nBottom" ] -2
+   FOR nRow := aPanel[ "nTop" ] + 1 TO aPanel[ "nBottom" ] - 2
       IF i <= Len( aPanel[ "aArray" ] )
          hb_DispOutAt( nRow, aPanel[ "nLeft" ] + 1, ;
-            PadR( aPanel[ "aArray" ][ i ][ F_NAME ], aPanel[ "nRight" ] - aPanel[ "nLeft" ] -1 ), ;
-            iif( aPanel_Selected == aPanel .AND. i == aPanel[ "h" ], 0x30, NIL ) )
+            PadR( aPanel[ "aArray" ][ i ][ F_NAME ], aPanel[ "nRight" ] - aPanel[ "nLeft" ] - 1 ), ;
+            iif( aPanel_Selected == aPanel .AND. i == aPanel[ "nPosition_Indicator" ], 0x30, NIL ) )
          ++i
       ELSE
          EXIT
@@ -172,7 +248,31 @@ STATIC PROCEDURE Panel_Display( aPanel )
 STATIC PROCEDURE Panel_Fetchlist( aPanel, cDir )
 
    aPanel[ "cDir" ]   := hb_defaultValue( cDir, hb_cwd() )
-   aPanel[ "aArray" ] := hb_vfDirectory( aPanel[ "cDir" ] )
+   aPanel[ "aArray" ] := hb_vfDirectory( aPanel[ "cDir" ], "HSD" )
+   hb_ADel( aPanel[ "aArray" ], 1, .T. )
+   ASort( aPanel[ "aArray" ], 2, , {| x, y | x[ F_NAME ] < y[ F_NAME ] .OR. x[ F_ATTR ] > y[ F_ATTR ] } )
+
+   RETURN
+
+STATIC PROCEDURE ChangeDir()
+
+   LOCAL nPos, cDir
+
+   nPos := aPanel_Selected[ "nPosition_Indicator" ]
+   IF At( "D", aPanel_Selected[ "aArray" ][ nPos ][ F_ATTR ] ) == 0
+      RETURN
+   ENDIF
+   IF aPanel_Selected[ "aArray" ][ nPos ][ F_NAME ] == ".."
+      cDir := aPanel_Selected[ "cDir" ]
+      cDir := Left( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) )
+      aPanel_Selected[ "nPosition_Indicator" ] := aPanel_Selected[ "nPosition_Last" ]
+   ELSE
+      cDir := aPanel_Selected[ "cDir" ] + aPanel_Selected[ "aArray" ][ nPos ][ F_NAME ] + hb_ps()
+      aPanel_Selected[ "nPosition_Last" ] := nPos
+      aPanel_Selected[ "nPosition_Indicator" ] := 1
+   ENDIF
+   Panel_Fetchlist( aPanel_Selected, cDir )
+   Panel_Display( aPanel_Selected )
 
    RETURN
 
@@ -185,8 +285,9 @@ STATIC FUNCTION Panel_Init()
       "cDir"    => '', ;
       "aArray"  => {}, ;
       "f"       => 1,  ;
-      "h"       => 1 }
-
+      "nPosition_Indicator" => 1, ;
+      "nPosition_Last" => 1, ;
+      "nCurrentRow" => 1 }
 
 STATIC PROCEDURE BottomBar()
 
