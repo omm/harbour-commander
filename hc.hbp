@@ -1,0 +1,14 @@
+#
+#
+#
+
+-hblib
+-inc
+
+-olib/${hb_plat}/${hb_comp}/${hb_name}
+
+-w3 -es2
+
+-hbx=${hb_name}
+
+src/*.prg
