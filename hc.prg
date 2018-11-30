@@ -256,6 +256,12 @@ STATIC PROCEDURE Prompt()
 
          EXIT
 
+      CASE K_F3
+
+         HCView( aPanelSelect )
+
+         EXIT
+
       CASE K_F7
 
          cNewDir := MsgBox( "Create the directory", { "Yes", "No!" } )
@@ -454,5 +460,181 @@ STATIC PROCEDURE BottomBar()
    hb_DispOutAt( nRow, nCol * 8 + 2, "PullDn" + cSpaces, 0x30 )
    hb_DispOutAt( nRow, nCol * 9, "10", 0x7 )
    hb_DispOutAt( nRow, nCol * 9 + 2, "Quit  " + cSpaces, 0x30 )
+
+   RETURN
+
+STATIC PROCEDURE HCView( aPanel )
+
+   LOCAL nPos
+   LOCAL cString, aString
+   LOCAL lContinue := .T.
+   LOCAL nMaxRow := 0, nMaxCol := 0
+   LOCAL nRow := 1, nCol := 0, nNextRow := 0
+   LOCAL nKey, nKeyStd
+   LOCAL nRowOld, nColOld
+   LOCAL cScreen
+
+   nRowOld := Row()
+   nColOld := Col()
+   cScreen := SaveScreen( 0, 0, MaxRow(), MaxCol() )
+
+   nPos := aPanel[ _HC_nRowBar ] + aPanel[ _HC_nRowNo ]
+   IF At( "D", aPanel[ _HC_nArray ][ nPos ][ F_ATTR ] ) == 0
+
+      IF ( cString := hb_MemoRead( aPanel[ _HC_nArray ][ nPos ][ 1 ] ) ) == ""
+         hb_Alert( "Error reading: " + aPanel[ _HC_nArray ][ nPos ][ 1 ] )
+         RETURN
+      ELSE
+
+         aString := hb_ATokens( cString, .T. )
+
+         DO WHILE lContinue
+
+            IF nMaxRow != MaxRow() .OR. nMaxCol != MaxCol()
+               nMaxRow := MaxRow()
+               nMaxCol := MaxCol()
+
+               IF nRow > nMaxRow - 1
+                  nRow := nMaxRow - 1
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+
+            ENDIF
+
+            nKey := Inkey( 0, hb_bitOr( Set( _SET_EVENTMASK, INKEY_ALL ), HB_INKEY_EXT ) )
+
+            nKeyStd := hb_keyStd( nKey )
+
+            SWITCH nKeyStd
+
+            CASE K_ESC
+               lContinue := .F.
+               EXIT
+
+            CASE K_LBUTTONDOWN
+
+               IF MRow() > 0 .AND. MRow() < MaxRow() .AND. MCol() > 0 .AND. MCol() < MaxCol() .AND. MRow() < Len( aString ) + 1
+                  nRow := MRow()
+                  nCol := MCol()
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               EXIT
+
+            CASE K_MWFORWARD
+
+               IF nNextRow >= 1
+                  nNextRow--
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               EXIT
+
+            CASE K_MWBACKWARD
+
+               IF nNextRow < Len( aString ) - 1
+                  nNextRow++
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               EXIT
+
+            CASE K_UP
+
+               IF nRow > 1
+                  nRow--
+               ELSE
+                  IF nNextRow >= 1
+                     nNextRow--
+                  ENDIF
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               EXIT
+
+            CASE K_LEFT
+
+               IF nCol > 1
+                  nCol--
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               EXIT
+
+            CASE K_DOWN
+
+               IF nRow < nMaxRow - 1 .AND. nRow + nNextRow < Len( aString )
+                  nRow++
+               ELSE
+                  IF nRow + nNextRow < Len( aString )
+                     nNextRow++
+                  ENDIF
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               EXIT
+
+            CASE K_RIGHT
+
+               nCol++
+
+               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               EXIT
+
+            OTHERWISE
+
+            ENDSWITCH
+
+         ENDDO
+
+      ENDIF
+
+   ELSE
+      RETURN
+   ENDIF
+
+   RestScreen( 0, 0, MaxRow(), MaxCol(), cScreen )
+   SetPos( nRowOld, nColOld )
+
+   RETURN
+
+STATIC PROCEDURE StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+
+   LOCAL i
+   LOCAL nMaxRow := MaxRow(), nMaxCol := MaxCol()
+   LOCAL nLine
+   LOCAL nPos
+
+   nPos := aPanel[ _HC_nRowBar ] + aPanel[ _HC_nRowNo ]
+
+   DispBegin()
+   hb_Scroll()
+
+   hb_DispOutAt( 0, 0, ;
+      PadR( aPanel[ _HC_nArray ][ nPos ][ 1 ], nMaxCol + 1 ), 0x30 )
+
+   FOR i := 1 TO nMaxRow
+
+      nLine := i + nNextRow
+
+      IF nLine <= Len( aString )
+         hb_DispOutAt( i, 0, ;
+            PadR( aString[ nLine ], nMaxCol + 1 ), ;
+            iif( i == nRow, 0x70, 0x7 ) )
+      ELSE
+         hb_Scroll( i, 0, nMaxRow, nMaxCol + 1 )
+         hb_DispOutAt( i, 1, ">> EOF <<", 0x01 )
+         EXIT
+      ENDIF
+
+   NEXT
+
+   hb_DispOutAt( nMaxRow, 0, ;
+      PadR( " Row(" + hb_ntos( nRow + nNextRow ) + ") Col(" + hb_ntos( nCol ) + ")", nMaxCol + 1 ), 0x30 )
+
+   DispEnd()
+
+   SetPos( nRow, nCol )
 
    RETURN
