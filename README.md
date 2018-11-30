@@ -15,6 +15,13 @@ You can get subsequent updates using this command:
 
     git pull
 
+
+### Harbour Commander unstable binaries (updated after each commit)
+
+Windows (MinGW-w64 - for 32 and 64 bit)
+- [ Download HC ](https://github.com/rjopek/harbour-commander/releases/download/demo/hc.zip)
+
+
 ## Windows 10
 ![Windows](docs/img/hc_windows.png "Windows 10 desktop")
 
