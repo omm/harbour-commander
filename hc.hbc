@@ -2,11 +2,5 @@
 #
 #
 
-description=Harbour-Commmander
-
-libpaths=lib/${hb_plat}/${hb_comp}
-
-libs=${hb_name}
-
 {unix|linux|darwin}gt=gtxwc
 {win}gt=gtwvt
