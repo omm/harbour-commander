@@ -24,7 +24,7 @@
 #define _HC_nElements   11
 
 /* FError() */
-#define _HC_Meaning     2
+#define MEANING         2
 
 STATIC aPanelLeft
 STATIC aPanelRight
@@ -34,7 +34,7 @@ PROCEDURE Main()
 
    Set( _SET_DATEFORMAT, "yyyy-mm-dd" )
    Set( _SET_SCOREBOARD, .F. )
-   Set( _SET_EVENTMASK, hb_bitOr( INKEY_KEYBOARD, HB_INKEY_GTEVENT ) )
+   Set( _SET_EVENTMASK, hb_bitOr( INKEY_KEYBOARD, HB_INKEY_GTEVENT, INKEY_ALL ) )
    Set( _SET_INSERT, .T. )
 
    /* Setup input CP of the translation */
@@ -53,7 +53,7 @@ PROCEDURE Main()
    aPanelLeft := PanelInit()
    aPanelRight := PanelInit()
 
-   /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk nPos końcowy separator ścieżki */
+   /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk i końcowy separator ścieżki */
    PanelFetchList( aPanelLeft, hb_cwd() )
    PanelFetchList( aPanelRight, hb_cwd() )
 
@@ -93,8 +93,9 @@ STATIC PROCEDURE PanelFetchList( aPanel, cDir )
    aPanel[ _HC_cDir ] := hb_defaultValue( cDir, hb_cwd() )
    aPanel[ _HC_nArray ] := hb_vfDirectory( aPanel[ _HC_cDir ], "HSD" )
 
-   hb_ADel( aPanel[ _HC_nArray ], 1, .T. )
-   ASort( aPanel[ _HC_nArray ], 2, , {| x, y | x[ F_NAME ] < y[ F_NAME ] .OR. x[ F_ATTR ] > y[ F_ATTR ] } )
+   hb_ADel( aPanel[ _HC_nArray ], AScan( aPanel[ _HC_nArray ], {| x | x[ F_NAME ] == "." } ), .T. )
+   ASort( aPanel[ _HC_nArray ],,, {| x, y | ( ISDIR( cDir + hb_ps() + x[ F_NAME ] ) == ISDIR( cDir + hb_ps() + y[ F_NAME ] ) .AND. ( x[ F_NAME ] < y[ F_NAME ] ) ) .OR. ;
+      ( ISDIR( cDir + hb_ps() + x[ F_NAME ] ) .AND. ! ISDIR( cDir + hb_ps() + y[ F_NAME ] ) ) } )
 
    RETURN
 
@@ -120,23 +121,27 @@ STATIC PROCEDURE Prompt()
    LOCAL nMaxRow := 0, nMaxCol := 0
    LOCAL nKey, nKeyStd
    LOCAL cNewDir
-   LOCAL nError
-   LOCAL aError := { ;
-      { 0,  "Successful" }, ;
-      { 2,  "File not found" }, ;
-      { 3,  "Path not found" }, ;
-      { 4,  "Too many files open" }, ;
-      { 5,  "Access denied" }, ;
-      { 6,  "Invalid handle" }, ;
-      { 8,  "Insufficient memory" }, ;
-      { 15, "Invalid drive specified" }, ;
-      { 19, "Attempted to write to a write-protected disk" }, ;
-      { 21, "Drive not ready" }, ;
-      { 23, "Data CRC error" }, ;
-      { 29, "Write fault" }, ;
-      { 30, "Read fault" }, ;
-      { 32, "Sharing violation" }, ;
-      { 33, "Lock Violation" } }
+   LOCAL nPos
+   LOCAL cFileName
+   LOCAL nHandle
+   LOCAL nFError
+   LOCAL aFError := { ;
+      { 0,  "The operation completed successfully." }, ;
+      { 2,  "The system cannot find the file specified." }, ;
+      { 3,  "The system cannot find the path specified." }, ;
+      { 4,  "The system cannot open the file." }, ;
+      { 5,  "Access is denied." }, ;
+      { 6,  "The handle is invalid." }, ;
+      { 8,  "Not enough storage is available to process this command." }, ;
+      { 15, "The system cannot find the drive specified." }, ;
+      { 18, "There are no more files." }, ;
+      { 19, "Attempted to write to a write-protected disk." }, ;
+      { 21, "The device is not ready." }, ;
+      { 23, "Data error (cyclic redundancy check)." }, ;
+      { 29, "The system cannot write to the specified device." }, ;
+      { 30, "The system cannot read from the specified device." }, ;
+      { 32, "The process cannot access the file because it is being used by another process." }, ;
+      { 33, "The process cannot access the file because another process has locked a portion of the file." } }
 
    DO WHILE lContinue
 
@@ -171,7 +176,19 @@ STATIC PROCEDURE Prompt()
 
       CASE K_ENTER
 
-         ChangeDir()
+         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
+         IF Empty( aPanelSelect[ _HC_cComdLine ] )
+            IF At( "D", aPanelSelect[ _HC_nArray ][ nPos ][ F_ATTR ] ) == 0 
+                  hb_run( aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ] )
+               ELSE
+                  ChangeDir( aPanelSelect )
+            ENDIF
+         ELSE
+
+            hb_run( aPanelSelect[ _HC_cComdLine ] )
+            aPanelSelect[ _HC_cComdLine ] := NIL
+
+         ENDIF
 
          EXIT
 
@@ -223,7 +240,7 @@ STATIC PROCEDURE Prompt()
 
       CASE K_RIGHT
 
-         IF aPanelSelect[ _HC_nComdCol ] < 57 .AND. aPanelSelect[ _HC_nComdCol ] <= Len( aPanelSelect[ _HC_cComdLine ] )
+         IF aPanelSelect[ _HC_nComdCol ] < nMaxCol .AND. aPanelSelect[ _HC_nComdCol ] < Len( aPanelSelect[ _HC_cComdLine ] )
             aPanelSelect[ _HC_nComdCol ]++
          ELSE
             IF aPanelSelect[ _HC_nColNo ] + aPanelSelect[ _HC_nComdCol ] <= Len( aPanelSelect[ _HC_cComdLine ] )
@@ -258,21 +275,109 @@ STATIC PROCEDURE Prompt()
 
       CASE K_F3
 
-         HCView( aPanelSelect )
+         HCViewer( aPanelSelect, .F. )
+
+         EXIT
+
+      CASE K_F4
+
+         HCViewer( aPanelSelect, .T. )
+
+         EXIT
+
+
+      CASE K_F6
 
          EXIT
 
       CASE K_F7
 
-         cNewDir := MsgBox( "Create the directory", { "Yes", "No!" } )
-         IF hb_DirCreate( cNewDir ) == F_ERROR
-            IF ( nError := AScan( aError, {| x | x[ 1 ] == FError() } ) ) > 0
-               hb_Alert( "Cannot make directory, error: ; ;" + aError[ nError ][ _HC_Meaning ],, 0x70 )
+         cNewDir := MsgBox( "Create the directory.", { "Yes", "No!" } )
+         IF ( nFError := hb_DirCreate( cNewDir ) ) == 0
+
+            PanelFetchList( aPanelLeft, hb_cwd() )
+            PanelFetchList( aPanelRight, hb_cwd() )
+
+            PanelDisplay( aPanelLeft )
+            PanelDisplay( aPanelRight )
+
+         ELSE
+            IF ( nFError := AScan( aFError, {| x | x[ 1 ] == nFError } ) ) > 0
+               hb_Alert( "Cannot make directory, error: ; ;" + aFError[ nFError ][ MEANING ],, 0x70 )
             ELSE
                /* Wyświetl numer błędu, którego nie ma w tablicy błędu */
                hb_Alert( "Cannot make directory, error: ; ;" + hb_ntos( FError() ),, 0x70 )
             ENDIF
+         ENDIF
+
+         EXIT
+
+      CASE K_F8
+
+         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
+         IF aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ] == ".."
+            hb_Alert( "The item to be deleted has not been selected.",, 0x70 )
          ELSE
+            nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
+            IF At( "D", aPanelSelect[ _HC_nArray ][ nPos ][ F_ATTR ] ) == 0
+               IF hb_Alert( "Do you really want to delete the selected file ;" + aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ], { "Yes", "No!" }, 0x70 ) == 1
+                  IF FErase( aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ] ) == F_ERROR
+                     IF ( nFError := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
+                        hb_Alert( "File erase error: ; ;" + aFError[ nFError ][ MEANING ],, 0x70 )
+                     ELSE
+                        hb_Alert( "File erase error: ; ;" + hb_ntos( FError() ),, 0x70 )
+                     ENDIF
+                  ELSE
+
+                     PanelFetchList( aPanelLeft, hb_cwd() )
+                     PanelFetchList( aPanelRight, hb_cwd() )
+
+                     PanelDisplay( aPanelLeft )
+                     PanelDisplay( aPanelRight )
+
+                  ENDIF
+               ENDIF
+            ELSE
+               IF hb_Alert( "Do you really want to delete the selected directory ;" + aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ], { "Yes", "No!" }, 0x70 ) == 1
+                  IF ( nFError := hb_DirDelete( aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ] ) ) == 0
+
+                     PanelFetchList( aPanelLeft, hb_cwd() )
+                     PanelFetchList( aPanelRight, hb_cwd() )
+
+                     PanelDisplay( aPanelLeft )
+                     PanelDisplay( aPanelRight )
+
+                  ELSE
+                     IF ( nFError := AScan( aFError, {| x | x[ 1 ] == nFError } ) ) > 0
+                        hb_Alert( "Cannot make directory, error: ; ;" + aFError[ nFError ][ MEANING ],, 0x70 )
+                     ELSE
+                        hb_Alert( "Cannot make directory, error: ; ;" + hb_ntos( FError() ),, 0x70 )
+                     ENDIF
+                  ENDIF
+               ENDIF
+            ENDIF
+         ENDIF
+
+         EXIT
+
+      CASE K_SH_F4
+
+         cFileName := MsgBox( "Create file." )
+         IF nHandle := ( FCreate( cFileName, FC_NORMAL ) ) == F_ERROR
+
+            IF ( nFError := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
+               hb_Alert( "File cannot be created: ; ;" + aFError[ nFError ][ MEANING ],, 0x70 )
+            ELSE
+               hb_Alert( "File cannot be created: ; ;" + hb_ntos( FError() ),, 0x70 )
+            ENDIF
+         ELSE
+            IF ! FClose( nHandle )
+               IF ( nFError := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
+                  hb_Alert( "File cannot be created: ; ;" + aFError[ nFError ][ MEANING ],, 0x70 )
+               ELSE
+                  hb_Alert( "File cannot be created: ; ;" + hb_ntos( FError() ),, 0x70 )
+               ENDIF
+            ENDIF
 
             PanelFetchList( aPanelLeft, hb_cwd() )
             PanelFetchList( aPanelRight, hb_cwd() )
@@ -306,7 +411,7 @@ STATIC PROCEDURE PanelDisplay( aPanel )
    LOCAL nRow, nPos := 1
    LOCAL nLengthName := 0, nLengthSize := 0
 
-   AScan( aPanelSelect[ _HC_nArray ], {| x | ;
+   AScan( aPanel[ _HC_nArray ], {| x | ;
       nLengthName := Max( nLengthName, Len( x[ 1 ] ) ), ;
       nLengthSize := Max( nLengthSize, Len( Str( x[ 2 ] ) ) ) } )
 
@@ -355,25 +460,25 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
 
 STATIC FUNCTION Expression( nLengthName, nLengthSize, aExp1, aExp2, aExp3, aExp4, aExp5 )
 
-   LOCAL cSubString1, cSubString2, cSubString3, cSubString4, cSubString5
+   LOCAL cStr1, cStr2, cStr3, cStr4, cStr5
 
-   cSubString1 := PadR( aExp1 + Space( nLengthName ), nLengthName ) + " "
+   cStr1 := PadR( aExp1 + Space( nLengthName ), nLengthName ) + " "
 
    IF aExp1 == ".."
-      cSubString1 := PadR( "[" + AllTrim( cSubString1 ) + "]" + Space( nLengthName ), nLengthName ) + " "
+      cStr1 := PadR( "[" + AllTrim( cStr1 ) + "]" + Space( nLengthName ), nLengthName ) + " "
    ENDIF
 
    IF aExp5 == "D" .OR. aExp5 == "HD" .OR. aExp5 == "HSD" .OR. aExp5 == "HSDL" .OR. aExp5 == "RHSA" .OR. aExp5 == "RD"
-      cSubString2 := PadL( "DIR", nLengthSize + 3 ) + " "
+      cStr2 := PadL( "DIR", nLengthSize + 3 ) + " "
    ELSE
-      cSubString2 := PadL( Transform( aExp2, "9 999 999 999" ), nLengthSize + 3 ) + " "
+      cStr2 := PadL( Transform( aExp2, "9 999 999 999" ), nLengthSize + 3 ) + " "
    ENDIF
 
-   cSubString3 := DToC( aExp3 ) + " "
-   cSubString4 := aExp4 + " "
-   cSubString5 := PadL( aExp5, 3 )
+   cStr3 := DToC( aExp3 ) + " "
+   cStr4 := aExp4 + " "
+   cStr5 := PadL( aExp5, 3 )
 
-   RETURN cSubString1 + cSubString2 + cSubString3 + cSubString4 + cSubString5
+   RETURN cStr1 + cStr2 + cStr3 + cStr4 + cStr5
 
 STATIC FUNCTION ColoringSyntax( aExp5 )
 
@@ -387,48 +492,49 @@ STATIC FUNCTION ColoringSyntax( aExp5 )
 
    RETURN nColor
 
-STATIC PROCEDURE ChangeDir()
+STATIC PROCEDURE ChangeDir( aPanel )
 
    LOCAL nPos, cDir, cDir0
    LOCAL nPosLast
 
-   nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-   IF At( "D", aPanelSelect[ _HC_nArray ][ nPos ][ F_ATTR ] ) == 0
+   nPos := aPanel[ _HC_nRowBar ] + aPanel[ _HC_nRowNo ]
+   IF At( "D", aPanel[ _HC_nArray ][ nPos ][ F_ATTR ] ) == 0
       RETURN
    ENDIF
-   IF aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ] == ".."
-      cDir := aPanelSelect[ _HC_cDir ]
+   IF aPanel[ _HC_nArray ][ nPos ][ F_NAME ] == ".."
+      cDir := aPanel[ _HC_cDir ]
       cDir0 := SubStr( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) + 1 )
       cDir0 := SubStr( cDir0, 1, Len( cDir0 ) - 1 )
       cDir  := Left( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) )
-      PanelFetchlist( aPanelSelect, cDir )
-      nPosLast := Max( AScan( aPanelSelect[ _HC_nArray ], {| x | x[ F_NAME ] = cDir0 } ), 1 )
+      PanelFetchlist( aPanel, cDir )
+      nPosLast := Max( AScan( aPanel[ _HC_nArray ], {| x | x[ F_NAME ] = cDir0 } ), 1 )
 
-      IF nPosLast > aPanelSelect[ _HC_nBottom ] - 1
+      IF nPosLast > aPanel[ _HC_nBottom ] - 1
 
-         aPanelSelect[ _HC_nRowNo ] := nPosLast
+         aPanel[ _HC_nRowNo ] := nPosLast
 
          DO WHILE .T.
-            aPanelSelect[ _HC_nRowNo ] -= ( aPanelSelect[ _HC_nBottom ] - 1 )
-            IF aPanelSelect[ _HC_nRowNo ] < aPanelSelect[ _HC_nBottom ] - 1
+            aPanel[ _HC_nRowNo ] -= ( aPanel[ _HC_nBottom ] - 1 )
+            IF aPanel[ _HC_nRowNo ] < aPanel[ _HC_nBottom ] - 1
                EXIT
             ELSE
-               aPanelSelect[ _HC_nRowNo ]  := 0
-               aPanelSelect[ _HC_nRowBar ] := nPosLast
+               aPanel[ _HC_nRowNo ]  := 0
+               aPanel[ _HC_nRowBar ] := nPosLast
             ENDIF
          ENDDO
 
-         aPanelSelect[ _HC_nRowBar ] := aPanelSelect[ _HC_nBottom ] - 1
+         aPanel[ _HC_nRowBar ] := aPanel[ _HC_nBottom ] - 1
 
       ENDIF
 
    ELSE
-      cDir := aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_nArray ][ nPos ][ F_NAME ] + hb_ps()
-      aPanelSelect[ _HC_nRowBar ] := 1
-      aPanelSelect[ _HC_nRowNo  ] := 0
-      PanelFetchlist( aPanelSelect, cDir )
+      cDir := aPanel[ _HC_cDir ] + aPanel[ _HC_nArray ][ nPos ][ F_NAME ] + hb_ps()
+      aPanel[ _HC_nRowBar ] := 1
+      aPanel[ _HC_nRowNo  ] := 0
+      PanelFetchlist( aPanel, cDir )
    ENDIF
-   PanelDisplay( aPanelSelect )
+
+   PanelDisplay( aPanel )
 
    RETURN
 
@@ -463,13 +569,198 @@ STATIC PROCEDURE BottomBar()
 
    RETURN
 
-STATIC PROCEDURE HCView( aPanel )
+STATIC FUNCTION MsgBox( cMessage, aOptions )
+
+   LOCAL nMaxRow := 0, nMaxCol := 0
+   LOCAL cScreen
+   LOCAL aOptionsOK := {}, aPosButtons
+   LOCAL lContinue := .T.
+   LOCAL i
+   LOCAL nChoice := 1
+   LOCAL nOpWidth, nWidth, nInitCol, expValue
+   LOCAL nRowOld, nColOld
+   LOCAL nKey, nKeyStd
+   LOCAL cString := ""
+   LOCAL nCol := 0, nColNo := 0
+
+   nRowOld := Row()
+   nColOld := Col()
+
+   FOR EACH i IN hb_defaultValue( aOptions, {} )
+      IF HB_ISSTRING( i ) .AND. ! i == ""
+         AAdd( aOptionsOK, i )
+      ENDIF
+   NEXT
+
+   IF Len( aOptionsOK ) == 0
+      aOptionsOK := { "Ok" }
+   ENDIF
+
+   DO WHILE lContinue
+
+      DispBegin()
+      IF nMaxRow != Int( MaxRow() / 2 ) .OR. nMaxCol != Int( MaxCol() / 2 )
+
+         nMaxRow := Int( MaxRow() / 2 )
+         nMaxCol := Int( MaxCol() / 2 )
+
+         aPosButtons := {}
+         nOpWidth := 0
+
+         cScreen := SaveScreen( nMaxRow - 2, nMaxCol - 30, nMaxRow + 3, nMaxCol + 30 )
+
+         AEval( aOptionsOK, {| x | nOpWidth += Len( x ) + 4 } )
+
+         nWidth := nOpWidth + 2
+         nInitCol := Int( ( ( MaxCol() - ( nWidth + 2 ) ) / 2 ) + 0.5 )
+         expValue := nInitCol + Int( ( nWidth - nOpWidth ) / 2 ) + 2
+         AEval( aOptionsOK, {| x | AAdd( aPosButtons, expValue ), expValue += Len( x ) + 4 } )
+
+         hb_DispBox( nMaxRow - 2, nMaxCol - 30, nMaxRow + 3, nMaxCol + 30, HB_B_SINGLE_UNI + " ", 0x70 )
+         hb_DispOutAt( nMaxRow - 1, nMaxCol - 28, cMessage, 0x70 )
+
+         FOR i := 1 TO Len( aOptionsOK )
+            hb_DispOutAt( nMaxRow + 2, aPosButtons[ i ], " " + aOptionsOK[ i ] + " ", iif( i == nChoice, 0x07, 0x70 ) )
+         NEXT
+
+         MsgBoxDisplay( cString, nCol, nColNo )
+
+      ENDIF
+      DispEnd()
+
+      nKey := Inkey( 0, hb_bitOr( Set( _SET_EVENTMASK, INKEY_ALL ), HB_INKEY_EXT ) )
+      nKeyStd := hb_keyStd( nKey )
+
+      SWITCH nKeyStd
+      CASE K_ESC
+         lContinue := .F.
+         nChoice := 0
+         EXIT
+
+      CASE K_ENTER
+         lContinue := .F.
+         EXIT
+
+      CASE K_F1
+         EXIT
+
+      CASE K_F10
+         lContinue := .F.
+         nChoice := 0
+         EXIT
+
+      CASE K_LEFT
+
+         IF nCol > 0
+            nCol--
+         ELSE
+            IF nColNo >= 1
+               nColNo--
+            ENDIF
+         ENDIF
+
+         MsgBoxDisplay( cString, nCol, nColNo )
+
+         EXIT
+
+      CASE K_RIGHT
+
+         IF nCol < 56 .AND. nCol < Len( cString )
+            nCol++
+         ELSE
+            IF nColNo + nCol < Len( cString )
+               nColNo++
+            ENDIF
+         ENDIF
+
+         MsgBoxDisplay( cString, nCol, nColNo )
+
+         EXIT
+
+      CASE K_DEL
+
+         IF nCol >= 0
+            cString := Stuff( cString, nCol + 1, 1, "" )
+         ENDIF
+
+         MsgBoxDisplay( cString, nCol, nColNo )
+
+         EXIT
+
+      CASE K_BS
+
+         IF nCol > 0
+            cString := Stuff( cString, nCol, 1, "" )
+            nCol--
+         ENDIF
+
+         MsgBoxDisplay( cString, nCol, nColNo )
+
+         EXIT
+
+      CASE K_TAB
+         IF Len( aOptionsOK ) > 1
+            nChoice++
+            IF nChoice > Len( aOptionsOK )
+               nChoice := 1
+            ENDIF
+         ENDIF
+
+         FOR i := 1 TO Len( aOptionsOK )
+            hb_DispOutAt( nMaxRow + 2, aPosButtons[ i ], " " + aOptionsOK[ i ] + " ", iif( i == nChoice, 0x07, 0x70 ) )
+         NEXT
+
+         EXIT
+
+      OTHERWISE
+
+         IF ( nKeyStd >= 32 .AND. nKeyStd <= 126 ) .OR. ( nKeyStd >= 160 .AND. nKeyStd <= 255 ) .OR. ! hb_keyChar( nKeyStd ) == ""
+
+            cString := Stuff( cString, nCol + nColNo + 1, 0, hb_keyChar( nKeyStd ) )
+            IF nCol < 56
+               nCol++
+            ELSE
+               nColNo++
+            ENDIF
+            MsgBoxDisplay( cString, nCol, nColNo )
+
+         ENDIF
+
+      ENDSWITCH
+
+   ENDDO
+
+   RestScreen( nMaxRow - 2, nMaxCol - 30, nMaxRow + 3, nMaxCol + 30, cScreen )
+   SetPos( nRowOld, nColOld )
+
+   RETURN iif( nChoice == 1, cString, 0 )
+
+STATIC PROCEDURE MsgBoxDisplay( cString, nCol, nColNo )
+
+   LOCAL nMaxRow := Int( MaxRow() / 2 ), nMaxCol := Int( MaxCol() / 2 )
+
+   DispBegin()
+
+   hb_DispOutAt( nMaxRow, nMaxCol - 28, PadR( SubStr( cString, 1 + nColNo, 57 + nColNo ), 57 ) )
+
+   SetPos( nMaxRow, nMaxCol - 28 + nCol )
+
+   DispEnd()
+
+   RETURN
+
+STATIC PROCEDURE HCViewer( aPanel, lArg )
 
    LOCAL nPos
-   LOCAL cString, aString
+   LOCAL cFileName
+   LOCAL cString
+   LOCAL aString
    LOCAL lContinue := .T.
    LOCAL nMaxRow := 0, nMaxCol := 0
-   LOCAL nRow := 1, nCol := 0, nNextRow := 0
+   LOCAL nRow := 1, nCol := 0, nRowNo := 0, nColNo := 0
+   LOCAL cStringEditingRow
+   LOCAL cSubString
+   LOCAL lToggleInsert := .F.
    LOCAL nKey, nKeyStd
    LOCAL nRowOld, nColOld
    LOCAL cScreen
@@ -481,11 +772,14 @@ STATIC PROCEDURE HCView( aPanel )
    nPos := aPanel[ _HC_nRowBar ] + aPanel[ _HC_nRowNo ]
    IF At( "D", aPanel[ _HC_nArray ][ nPos ][ F_ATTR ] ) == 0
 
-      IF ( cString := hb_MemoRead( aPanel[ _HC_nArray ][ nPos ][ 1 ] ) ) == ""
-         hb_Alert( "Error reading: " + aPanel[ _HC_nArray ][ nPos ][ 1 ] )
+      /* Returns the contents of a text file as a character string. */
+      cFileName := aPanel[ _HC_nArray ][ nPos ][ F_NAME ]
+      IF ( cString := hb_MemoRead( cFileName ) ) == ""
+         hb_Alert( "Error reading: " + cFileName )
          RETURN
       ELSE
 
+         /* A character array, filled with the individual tokens found. */
          aString := hb_ATokens( cString, .T. )
 
          DO WHILE lContinue
@@ -498,7 +792,7 @@ STATIC PROCEDURE HCView( aPanel )
                   nRow := nMaxRow - 1
                ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
 
             ENDIF
 
@@ -519,25 +813,25 @@ STATIC PROCEDURE HCView( aPanel )
                   nCol := MCol()
                ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
                EXIT
 
             CASE K_MWFORWARD
 
-               IF nNextRow >= 1
-                  nNextRow--
+               IF nRowNo >= 1
+                  nRowNo--
                ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
                EXIT
 
             CASE K_MWBACKWARD
 
-               IF nNextRow < Len( aString ) - 1
-                  nNextRow++
+               IF nRow + nRowNo < Len( aString )
+                  nRowNo++
                ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
                EXIT
 
             CASE K_UP
@@ -545,44 +839,242 @@ STATIC PROCEDURE HCView( aPanel )
                IF nRow > 1
                   nRow--
                ELSE
-                  IF nNextRow >= 1
-                     nNextRow--
+                  IF nRowNo >= 1
+                     nRowNo--
                   ENDIF
                ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               IF aString[ nRowNo + nRow ] == ""
+                  nCol  := 0
+               ELSE
+                  IF nCol > Len( aString[ nRowNo + nRow ] )
+                     nCol := Len( aString[ nRowNo + nRow ] )
+                  ENDIF
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
                EXIT
 
             CASE K_LEFT
 
-               IF nCol > 1
+               IF nCol > 0
                   nCol--
+               ELSE
+                  IF nColNo > 0
+                     nColNo--
+                  ENDIF
                ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
                EXIT
 
             CASE K_DOWN
 
-               IF nRow < nMaxRow - 1 .AND. nRow + nNextRow < Len( aString )
+               IF nRow < nMaxRow - 1 .AND. nRow < Len( aString )
                   nRow++
                ELSE
-                  IF nRow + nNextRow < Len( aString )
-                     nNextRow++
+                  IF nRowNo + nRow < Len( aString )
+                     nRowNo++
                   ENDIF
                ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               IF aString[ nRowNo + nRow ] == ""
+                  nCol := 0
+               ELSE
+                  IF nCol > Len( aString[ nRowNo + nRow ] )
+                     nCol := Len( aString[ nRowNo + nRow ] )
+                  ENDIF
+               ENDIF
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
                EXIT
 
             CASE K_RIGHT
 
-               nCol++
+               IF nCol < Len( aString[ nRowNo + nRow ]  )
+                  nCol++
+               ENDIF
 
-               StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               EXIT
+
+            CASE K_HOME
+
+               nCol := 0
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               EXIT
+
+            CASE K_END
+
+               nCol := Len( aString[ nRowNo + nRow ]  )
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               EXIT
+
+            CASE K_PGUP
+
+               IF nRow <= 1
+                  IF nRowNo - nMaxRow >= 0
+                     nRowNo -= nMaxRow
+                  ENDIF
+               ENDIF
+               nRow := 1
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               EXIT
+
+            CASE K_PGDN
+
+               IF nRow >= nMaxRow - 1
+                  IF nRowNo + nMaxRow  <= Len( aString )
+                     nRowNo += nMaxRow
+                  ENDIF
+               ENDIF
+               nRow := Min( nMaxRow - 1, Len( aString ) - nRowNo )
+
+               hb_Scroll( 1, 0, nMaxRow, nMaxCol )
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               EXIT
+
+            CASE K_CTRL_PGUP
+
+               nRow := 0
+               nRowNo := 0
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               EXIT
+
+            CASE K_CTRL_PGDN
+
+               nRow := nMaxRow - 1
+               nRowNo := Len( aString ) - nMaxRow + 1
+
+               StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               EXIT
+
+            CASE K_ENTER
+               AltD()
+               IF lArg
+                  IF aString[ nRowNo + nRow ] == "" .OR. nCol == 0
+
+                     hb_AIns( aString, nRowNo + nRow, "", .T. )
+                     nRow++
+                  ELSE
+                     IF nCol == Len( aString[ nRowNo + nRow ] )
+                        hb_AIns( aString, nRowNo + nRow + 1, "", .T. )
+                        nRow++
+                        nCol := 0
+                     ELSE
+                        cSubString := Right( aString[ nRowNo + nRow ], Len( aString[ nRowNo + nRow ] ) - nCol )
+                        cStringEditingRow := aString[ nRowNo + nRow ]
+                        aString[ nRowNo + nRow ] := Stuff( cStringEditingRow, nCol + 1, Len( aString[ nRowNo + nRow ] ) - nCol, "" )
+                        hb_AIns( aString, nRowNo + nRow, cSubString + 1, .T. )
+                        nRow++
+                        nCol := 0
+                     ENDIF
+                  ENDIF
+
+                  SaveFile( aString, cFileName )
+                  StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               ENDIF
+               EXIT
+
+            CASE K_INS
+               IF lArg
+                  IF lToggleInsert
+                     SetCursor( SC_NORMAL )
+                     lToggleInsert := .F.
+                  ELSE
+                     SetCursor( SC_INSERT )
+                     lToggleInsert := .T.
+                  ENDIF
+               ENDIF
+               EXIT
+
+            CASE K_DEL
+               IF lArg
+                  IF aString[ nRowNo + nRow ] == ""
+                     IF nRow >= 0
+                        hb_ADel( aString, nRowNo + nRow, .T. )
+                     ENDIF
+                  ELSE
+                     IF nCol == Len( aString[ nRowNo + nRow ] )
+
+                        aString[ nRowNo + nRow ] += aString[ nRowNo + nRow + 1 ]
+
+                        hb_ADel( aString, nRowNo + nRow + 1, .T. )
+                     ELSE
+                        cStringEditingRow := aString[ nRowNo + nRow ]
+                        aString[ nRowNo + nRow ] := Stuff( cStringEditingRow, nCol + 1, 1, "" )
+                     ENDIF
+                  ENDIF
+
+                  SaveFile( aString, cFileName )
+                  StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               ENDIF
+               EXIT
+
+            CASE K_BS
+               IF lArg
+                  IF aString[ nRowNo + nRow ] == ""
+                     IF nRow > 1
+                        hb_ADel( aString, nRowNo + nRow, .T. )
+                        nRow--
+                        nCol := Len( aString[ nRowNo + nRow ] )
+                     ENDIF
+                  ELSE
+                     IF nCol > 0
+                        cStringEditingRow := aString[ nRowNo + nRow ]
+                        aString[ nRowNo + nRow ] := Stuff( cStringEditingRow, nCol, 1, "" )
+                        nCol--
+                     ELSE
+                        IF nRow > 1
+                           IF aString[ nRowNo + nRow - 1 ] == ""
+                              nCol := 0
+                           ELSE
+                              nCol := Len( aString[ nRowNo + nRow - 1 ] )
+                           ENDIF
+
+                           aString[ nRowNo + nRow - 1 ] += aString[ nRowNo + nRow ]
+
+                           hb_ADel( aString, nRowNo + nRow, .T. )
+                           nRow--
+                        ENDIF
+                     ENDIF
+                  ENDIF
+
+                  SaveFile( aString, cFileName )
+                  StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               ENDIF
+               EXIT
+
+            CASE K_TAB
+               IF lArg
+                  cStringEditingRow := aString[ nRowNo + nRow ]
+
+                  aString[ nRowNo + nRow ] := Stuff( cStringEditingRow, nCol + 1, iif( lToggleInsert, 1, 0 ), "   " )
+                  nCol += 3
+
+                  SaveFile( aString, cFileName )
+                  StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+               ENDIF
                EXIT
 
             OTHERWISE
+
+               IF lArg
+                  IF ( nKeyStd >= 32 .AND. nKeyStd <= 126 ) .OR. ( nKeyStd >= 160 .AND. nKeyStd <= 255 ) .OR. ! hb_keyChar( nKeyStd ) == ""
+
+                     cStringEditingRow := aString[ nRowNo + nRow ]
+                     aString[ nRowNo + nRow ] := Stuff( cStringEditingRow, nCol + 1, iif( lToggleInsert, 1, 0 ), hb_keyChar( nKeyStd ) )
+                     nCol++
+
+                     SaveFile( aString, cFileName )
+                     StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
+                  ENDIF
+               ENDIF
 
             ENDSWITCH
 
@@ -599,7 +1091,7 @@ STATIC PROCEDURE HCView( aPanel )
 
    RETURN
 
-STATIC PROCEDURE StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
+STATIC PROCEDURE StringDisplay( aPanel, aString, nRow, nCol, nRowNo )
 
    LOCAL i
    LOCAL nMaxRow := MaxRow(), nMaxCol := MaxCol()
@@ -612,11 +1104,11 @@ STATIC PROCEDURE StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
    hb_Scroll()
 
    hb_DispOutAt( 0, 0, ;
-      PadR( aPanel[ _HC_nArray ][ nPos ][ 1 ], nMaxCol + 1 ), 0x30 )
+      PadR( aPanel[ _HC_nArray ][ nPos ][ F_NAME ] + "  " + hb_ntos( hb_FSize( aPanel[ _HC_nArray ][ nPos ][ F_NAME ] ) ), nMaxCol + 1 ), 0x30 )
 
    FOR i := 1 TO nMaxRow
 
-      nLine := i + nNextRow
+      nLine := i + nRowNo
 
       IF nLine <= Len( aString )
          hb_DispOutAt( i, 0, ;
@@ -631,10 +1123,24 @@ STATIC PROCEDURE StringDisplay( aPanel, aString, nRow, nCol, nNextRow )
    NEXT
 
    hb_DispOutAt( nMaxRow, 0, ;
-      PadR( " Row(" + hb_ntos( nRow + nNextRow ) + ") Col(" + hb_ntos( nCol ) + ")", nMaxCol + 1 ), 0x30 )
+      PadR( " Row(" + hb_ntos( nRow + nRowNo ) + ") Col(" + hb_ntos( nCol ) + ")", nMaxCol + 1 ), 0x30 )
 
    DispEnd()
 
    SetPos( nRow, nCol )
 
    RETURN
+
+STATIC FUNCTION SaveFile( aString, cFileName )
+
+   LOCAL cString := ""
+
+   AEval( aString, {| e | cString += e + hb_eol() } )
+   hb_MemoWrit( cFileName, cString )
+
+   RETURN NIL
+
+// ====================================
+FUNCTION Q( xPar )
+   RETURN Alert( hb_ValToExp( xPar ) )
+// ====================================
