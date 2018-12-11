@@ -1,9 +1,10 @@
 # Welcome to Harbour Commander
 
 Harbour Commander is a lightweight, cross-platform file manager with a dual-pane interface. It runs on any operating system with Microsoft Windows, Linux, Unix variants, several BSD descendants, Mac OS X, MINIX 3, Windows CE, Pocket PC, Symbian, iOS, Android, QNX, VxWorks, OS/2/eComStation, BeOS/Haiku, AIX, MS-DOS and FreeDOS. Harbour commander works in text mode and provides a simple and intuitive interface for performing most of the necessary actions, przeglądanie plików i katalogów, edycja, kopiowanie i zmienianie nazw plików. The software was written in
-[Harbour 3.4](https://github.com/vszakats/harbour-core) language, and is thus very fast.
+[Harbour](https://github.com/harbour/core) language, and is thus very fast.
 
-<p align="center"><a href="https://harbour.github.io/"><img src="docs/img/os.png"/></a></p>
+.. figure:: http://harbour.pl/img/os.png
+    :align: center
 
 ### Harbour Commander live source repository
 
@@ -19,7 +20,7 @@ You can get subsequent updates using this command:
 ### Harbour Commander unstable binaries (updated after each commit)
 
 Windows (MinGW-w64 - for 32 and 64 bit)
-- [ Download HC ](https://github.com/rjopek/harbour-commander/releases/download/demo/hc.zip)
+- [ Download HC ](http://harbour.pl/hc.zip)
 
 
 ## Windows 10
@@ -31,3 +32,8 @@ Windows (MinGW-w64 - for 32 and 64 bit)
 ## Unix
 ![Solaris](docs/img/hc_solaris.png "Solaris desktop GNOME")
 
+## License
+Licensed under the [MIT](LICENSE) License.
+
+## Contributor Covenant Code of Conduct
+[Contributor Covenant Code of Conduct](.github/CODE_OF_CONDUCT.md)
