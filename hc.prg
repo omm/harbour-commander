@@ -1,4 +1,4 @@
-/* Copyright 2017-2018 Rafał Jopek ( rafaljopek at hotmail com ) */
+/* Copyright 2017-2019 Rafał Jopek ( rafaljopek at hotmail com ) */
 
 /* Harbour Commander */
 
@@ -17,22 +17,27 @@
 #define OSUPPER( x )  ( x )
 #endif
 
-#define _HC_nTop          1
-#define _HC_nLeft         2
-#define _HC_nBottom       3
-#define _HC_nRight        4
-#define _HC_cDir          5
-#define _HC_aArray        6
-#define _HC_nRowBar       7
-#define _HC_nRowNo        8
-#define _HC_cComdLine     9
-#define _HC_nComdCol     10
-#define _HC_nComdColNo   11
 
-#define _HC_nElements    11
+#define _nTop         1
+#define _nLeft        2
+#define _nBottom      3
+#define _nRight       4
+#define _cCurrentDir  5
+#define _aDirectory   6
+#define _nRowBar      7
+#define _nRowNo       8
+#define _cComdLine    9
+#define _nComdCol     10
+#define _nComdColNo   11
+
+#define _nElements    11
 
 /* FError() */
-#define MEANING           2
+#define MEANING       2
+
+#define F_STATUS      6  /* zaznacz plik, katalog */
+
+#define FXO_SHARELOCK  0x4000  /* emulate DOS SH_DENY* mode in POSIX OS */
 
 STATIC aPanelLeft
 STATIC aPanelRight
@@ -53,7 +58,7 @@ PROCEDURE Main()
    /* Configure terminal and OS codepage */
    hb_SetTermCP( hb_cdpTerm() )
    Set( _SET_OSCODEPAGE, hb_cdpOS() )
-   Set( _SET_DBCODEPAGE, "EN" )  /* do not switch RDD CP to UTF-8 till it's fully operational */
+   Set( _SET_DBCODEPAGE, "EN" )
 
    hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_ROWS )
    hb_gtInfo( HB_GTI_WINTITLE, "Harbour Commander" )
@@ -80,45 +85,52 @@ STATIC FUNCTION PanelInit()
 
    LOCAL aInit
 
-   aInit := Array( _HC_nElements )
+   aInit := Array( _nElements )
 
-   aInit[ _HC_nTop       ] := 0
-   aInit[ _HC_nLeft      ] := 0
-   aInit[ _HC_nBottom    ] := 0
-   aInit[ _HC_nRight     ] := 0
-   aInit[ _HC_cDir       ] := ""
-   aInit[ _HC_aArray     ] := {}
-   aInit[ _HC_nRowBar    ] := 1
-   aInit[ _HC_nRowNo     ] := 0
-   aInit[ _HC_cComdLine  ] := ""
-   aInit[ _HC_nComdCol   ] := 0
-   aInit[ _HC_nComdColNo ] := 0
+   aInit[ _nTop        ] := 0
+   aInit[ _nLeft       ] := 0
+   aInit[ _nBottom     ] := 0
+   aInit[ _nRight      ] := 0
+   aInit[ _cCurrentDir ] := ""
+   aInit[ _aDirectory  ] := {}
+   aInit[ _nRowBar     ] := 1
+   aInit[ _nRowNo      ] := 0
+   aInit[ _cComdLine   ] := ""
+   aInit[ _nComdCol    ] := 0
+   aInit[ _nComdColNo  ] := 0
 
    RETURN aInit
 
 STATIC PROCEDURE PanelFetchList( aPanel, cDir )
 
-   aPanel[ _HC_cDir ] := hb_defaultValue( cDir, hb_cwd() )
-   aPanel[ _HC_aArray ] := hb_vfDirectory( aPanel[ _HC_cDir ], "HSD" )
+   LOCAL i
 
-   hb_ADel( aPanel[ _HC_aArray ], AScan( aPanel[ _HC_aArray ], {| x | x[ F_NAME ] == "." } ), .T. )
-   ASort( aPanel[ _HC_aArray ],,, {| x, y | DIR_PREFIX( x ) + OSUPPER( x[ F_NAME ] ) < DIR_PREFIX( y ) + OSUPPER( y[ F_NAME ] ) } )
+   aPanel[ _cCurrentDir ] := hb_defaultValue( cDir, hb_cwd() )
+   aPanel[ _aDirectory ] := hb_vfDirectory( aPanel[ _cCurrentDir ], "HSD" )
+
+   /* dodaję do każdego elementu tablicy wartość .T. */
+   FOR i := 1 TO Len( aPanel[ _aDirectory ] )  // ? na AEval()
+      AAdd( aPanel[ _aDirectory ][ i ], .T. )
+   NEXT
+
+   hb_ADel( aPanel[ _aDirectory ], AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == "." } ), .T. )
+   ASort( aPanel[ _aDirectory ],,, {| x, y | DIR_PREFIX( x ) + OSUPPER( x[ F_NAME ] ) < DIR_PREFIX( y ) + OSUPPER( y[ F_NAME ] ) } )
 
    RETURN
 
 STATIC PROCEDURE AutoSize()
 
-   Resize( aPanelLeft, 0, 0, MaxRow() -2, MaxCol() / 2 )
-   Resize( aPanelRight, 0, MaxCol() / 2 + 1, MaxRow() -2, MaxCol() )
+   Resize( aPanelLeft, 0, 0, MaxRow() - 2, MaxCol() / 2 )
+   Resize( aPanelRight, 0, MaxCol() / 2 + 1, MaxRow() - 2, MaxCol() )
 
    RETURN
 
 STATIC PROCEDURE Resize( aPanel, nTop, nLeft, nBottom, nRight )
 
-   aPanel[ _HC_nTop    ] := nTop
-   aPanel[ _HC_nLeft   ] := nLeft
-   aPanel[ _HC_nBottom ] := nBottom
-   aPanel[ _HC_nRight  ] := nRight
+   aPanel[ _nTop    ] := nTop
+   aPanel[ _nLeft   ] := nLeft
+   aPanel[ _nBottom ] := nBottom
+   aPanel[ _nRight  ] := nRight
 
    RETURN
 
@@ -127,31 +139,14 @@ STATIC PROCEDURE Prompt()
    LOCAL lContinue := .T.
    LOCAL nMaxRow := 0, nMaxCol := 0
    LOCAL nKey, nKeyStd
-   LOCAL cNewDir
    LOCAL nPos
    LOCAL cFileName
-   LOCAL aTarget := {}, aItem, aDirScan
-   LOCAL nLengthName := 0
    LOCAL pHandle
    LOCAL nMRow, nMCol
+   LOCAL nCol
+   LOCAL cSpaces
    LOCAL nErrorCode
-   LOCAL aFError := { ;
-      { 0,  "The operation completed successfully." }, ;
-      { 2,  "The system cannot find the file specified." }, ;
-      { 3,  "The system cannot find the path specified." }, ;
-      { 4,  "The system cannot open the file." }, ;
-      { 5,  "Access is denied." }, ;
-      { 6,  "The handle is invalid." }, ;
-      { 8,  "Not enough storage is available to process this command." }, ;
-      { 15, "The system cannot find the drive specified." }, ;
-      { 18, "There are no more files." }, ;
-      { 19, "Attempted to write to a write-protected disk." }, ;
-      { 21, "The device is not ready." }, ;
-      { 23, "Data error (cyclic redundancy check)." }, ;
-      { 29, "The system cannot write to the specified device." }, ;
-      { 30, "The system cannot read from the specified device." }, ;
-      { 32, "The process cannot access the file because it is being used by another process." }, ;
-      { 33, "The process cannot access the file because another process has locked a portion of the file." } }
+   LOCAL cNewDrive
 
    DO WHILE lContinue
 
@@ -189,22 +184,24 @@ STATIC PROCEDURE Prompt()
 
       CASE K_ENTER
 
-         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-         IF Empty( aPanelSelect[ _HC_cComdLine ] )
+         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
+         IF Empty( aPanelSelect[ _cComdLine ] )
             /* jeżeli stoimy na pliku */
-            IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-               hb_run( aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] )
+            IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+               hb_run( aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] )
             ELSE
                ChangeDir( aPanelSelect )
             ENDIF
          ELSE
 
-            aPanelSelect[ _HC_cComdLine ] := aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_cComdLine ]
+            // aPanelSelect[ _cComdLine ] := aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _cComdLine ]
 
-            hb_run( aPanelSelect[ _HC_cComdLine ] )
-            aPanelSelect[ _HC_cComdLine ] := ""
+            hb_Scroll()
+            hb_run( aPanelSelect[ _cComdLine ] )
+            aPanelSelect[ _cComdLine ] := ""
+            Inkey( 0 )
             nMaxRow := 0
-            aPanelSelect[ _HC_nComdCol ] := 0
+            aPanelSelect[ _nComdCol ] := 0
 
             PanelRefresh( aPanelSelect )
          ENDIF
@@ -223,8 +220,82 @@ STATIC PROCEDURE Prompt()
          PanelDisplay( aPanelRight )
          EXIT
 
+      CASE K_MOUSEMOVE
+
+         DispBegin()
+
+         nMRow := MRow()
+         nCol := Int( nMaxCol / 10 ) + 1
+
+         BottomBar()
+         IF nMRow > nMaxRow - 1
+
+            cSpaces := Space( nCol - 8 )
+
+            SWITCH Int( MCol() / nCol ) + 1
+            CASE 1  ; hb_DispOutAt( nMRow, 2,            "Help  " + cSpaces, 0xb0 ) ; EXIT
+            CASE 2  ; hb_DispOutAt( nMRow, nCol + 2,     "Menu  " + cSpaces, 0xb0 ) ; EXIT
+            CASE 3  ; hb_DispOutAt( nMRow, nCol * 2 + 2, "View  " + cSpaces, 0xb0 ) ; EXIT
+            CASE 4  ; hb_DispOutAt( nMRow, nCol * 3 + 2, "Edit  " + cSpaces, 0xb0 ) ; EXIT
+            CASE 5  ; hb_DispOutAt( nMRow, nCol * 4 + 2, "Copy  " + cSpaces, 0xb0 ) ; EXIT
+            CASE 6  ; hb_DispOutAt( nMRow, nCol * 5 + 2, "RenMov" + cSpaces, 0xb0 ) ; EXIT
+            CASE 7  ; hb_DispOutAt( nMRow, nCol * 6 + 2, "MkDir " + cSpaces, 0xb0 ) ; EXIT
+            CASE 8  ; hb_DispOutAt( nMRow, nCol * 7 + 2, "Delete" + cSpaces, 0xb0 ) ; EXIT
+            CASE 9  ; hb_DispOutAt( nMRow, nCol * 8 + 2, "PullDn" + cSpaces, 0xb0 ) ; EXIT
+            CASE 10 ; hb_DispOutAt( nMRow, nCol * 9 + 2, "Quit  " + cSpaces, 0xb0 ) ; EXIT
+            ENDSWITCH
+
+         ENDIF
+
+         DispEnd()
+         EXIT
+
       CASE K_LDBLCLK
-         ChangeDir( aPanelSelect )
+
+         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
+         /* jeżeli stoimy na pliku */
+         IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+            hb_run( aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] )
+         ELSE
+            ChangeDir( aPanelSelect )
+         ENDIF
+
+         EXIT
+
+      CASE K_RBUTTONDOWN
+
+         nMRow := MRow()
+         nMCol := MCol()
+
+         IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol < Int( MaxCol() / 2 ) + 1
+            aPanelSelect := aPanelLeft
+            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
+               aPanelSelect[ _nRowBar ] := nMRow
+            ENDIF
+         ENDIF
+
+         IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol > Int( MaxCol() / 2 )
+            aPanelSelect := aPanelRight
+            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
+               aPanelSelect[ _nRowBar ] := nMRow
+            ENDIF
+         ENDIF
+
+         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
+         IF aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
+
+            /* oznaczam stan usunięcia aktualnego elementu w tablicy */
+            IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
+               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
+            ELSE
+               /* zwracam stan usunięcia aktualnego elementu w tablicy */
+               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
+            ENDIF
+
+         ENDIF
+
+         PanelDisplay( aPanelLeft )
+         PanelDisplay( aPanelRight )
          EXIT
 
       CASE K_LBUTTONDOWN
@@ -232,18 +303,41 @@ STATIC PROCEDURE Prompt()
          nMRow := MRow()
          nMCol := MCol()
 
-         IF nMRow > 0 .AND. nMRow < MaxRow() -1 .AND. nMCol < Int( MaxCol() / 2 ) + 1
+         IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol < Int( MaxCol() / 2 ) + 1
             aPanelSelect := aPanelLeft
-            IF nMRow <= Len( aPanelSelect[ _HC_aArray ] )
-               aPanelSelect[ _HC_nRowBar ] := nMRow
+            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
+               aPanelSelect[ _nRowBar ] := nMRow
             ENDIF
          ENDIF
 
-         IF nMRow > 0 .AND. nMRow < MaxRow() -1 .AND. nMCol > Int( MaxCol() / 2 )
+         IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol > Int( MaxCol() / 2 )
             aPanelSelect := aPanelRight
-            IF nMRow <= Len( aPanelSelect[ _HC_aArray ] )
-               aPanelSelect[ _HC_nRowBar ] := nMRow
+            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
+               aPanelSelect[ _nRowBar ] := nMRow
             ENDIF
+         ENDIF
+
+         /* BottomBar */
+         nCol := Int( nMaxCol / 10 ) + 1
+         IF nMRow > nMaxRow - 1
+            SWITCH Int( MCol() / nCol ) + 1
+            CASE 1  ; EXIT
+            CASE 2  ; EXIT
+            CASE 3  ; FunctionKey_F3( aPanelSelect ) ; EXIT
+            CASE 4  ; FunctionKey_F4( aPanelSelect ) ; EXIT
+            CASE 5  ; FunctionKey_F5( aPanelSelect ) ; EXIT
+            CASE 6  ; FunctionKey_F6( aPanelSelect ) ; EXIT
+            CASE 7  ; FunctionKey_F7( aPanelSelect ) ; EXIT
+            CASE 8  ; FunctionKey_F8( aPanelSelect ) ; EXIT
+            CASE 9  ; EXIT
+            CASE 10
+               IF HC_Alert( "The Harbour Commander", "Do you want to quit the Harbour Commander?", { "Yes", "No!" }, 0x8f ) == 1
+                  lContinue := .F.
+               ENDIF
+               EXIT
+
+            ENDSWITCH
+
          ENDIF
 
          PanelDisplay( aPanelLeft )
@@ -252,11 +346,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_MWFORWARD
 
-         IF aPanelSelect[ _HC_nRowBar ] > 1
-            --aPanelSelect[ _HC_nRowBar ]
+         IF aPanelSelect[ _nRowBar ] > 1
+            --aPanelSelect[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _HC_nRowNo ] >= 1
-               --aPanelSelect[ _HC_nRowNo ]
+            IF aPanelSelect[ _nRowNo ] >= 1
+               --aPanelSelect[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -264,11 +358,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_MWBACKWARD
 
-         IF aPanelSelect[ _HC_nRowBar ] < aPanelSelect[ _HC_nBottom ] -1 .AND. aPanelSelect[ _HC_nRowBar ] <= Len( aPanelSelect[ _HC_aArray ] ) -1
-            ++aPanelSelect[ _HC_nRowBar ]
+         IF aPanelSelect[ _nRowBar ] < aPanelSelect[ _nBottom ] - 1 .AND. aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
+            ++aPanelSelect[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _HC_nRowNo ] + aPanelSelect[ _HC_nRowBar ] <= Len( aPanelSelect[ _HC_aArray ] ) -1
-               ++aPanelSelect[ _HC_nRowNo ]
+            IF aPanelSelect[ _nRowNo ] + aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
+               ++aPanelSelect[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -276,11 +370,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_UP
 
-         IF aPanelSelect[ _HC_nRowBar ] > 1
-            --aPanelSelect[ _HC_nRowBar ]
+         IF aPanelSelect[ _nRowBar ] > 1
+            --aPanelSelect[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _HC_nRowNo ] >= 1
-               --aPanelSelect[ _HC_nRowNo ]
+            IF aPanelSelect[ _nRowNo ] >= 1
+               --aPanelSelect[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -288,11 +382,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_DOWN
 
-         IF aPanelSelect[ _HC_nRowBar ] < aPanelSelect[ _HC_nBottom ] -1 .AND. aPanelSelect[ _HC_nRowBar ] <= Len( aPanelSelect[ _HC_aArray ] ) -1
-            ++aPanelSelect[ _HC_nRowBar ]
+         IF aPanelSelect[ _nRowBar ] < aPanelSelect[ _nBottom ] - 1 .AND. aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
+            ++aPanelSelect[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _HC_nRowNo ] + aPanelSelect[ _HC_nRowBar ] <= Len( aPanelSelect[ _HC_aArray ] ) -1
-               ++aPanelSelect[ _HC_nRowNo ]
+            IF aPanelSelect[ _nRowNo ] + aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
+               ++aPanelSelect[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -300,11 +394,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_LEFT
 
-         IF aPanelSelect[ _HC_nComdCol ] > 0
-            aPanelSelect[ _HC_nComdCol ]--
+         IF aPanelSelect[ _nComdCol ] > 0
+            aPanelSelect[ _nComdCol ]--
          ELSE
-            IF aPanelSelect[ _HC_nComdColNo ] >= 1
-               aPanelSelect[ _HC_nComdColNo ]--
+            IF aPanelSelect[ _nComdColNo ] >= 1
+               aPanelSelect[ _nComdColNo ]--
             ENDIF
          ENDIF
 
@@ -312,11 +406,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_RIGHT
 
-         IF aPanelSelect[ _HC_nComdCol ] < nMaxCol .AND. aPanelSelect[ _HC_nComdCol ] < Len( aPanelSelect[ _HC_cComdLine ] )
-            aPanelSelect[ _HC_nComdCol ]++
+         IF aPanelSelect[ _nComdCol ] < nMaxCol - Len( aPanelSelect[ _cCurrentDir ] ) .AND. aPanelSelect[ _nComdCol ] < Len( aPanelSelect[ _cComdLine ] )
+            aPanelSelect[ _nComdCol ]++
          ELSE
-            IF aPanelSelect[ _HC_nComdColNo ] + aPanelSelect[ _HC_nComdCol ] < Len( aPanelSelect[ _HC_cComdLine ] )
-               aPanelSelect[ _HC_nComdColNo ]++
+            IF aPanelSelect[ _nComdColNo ] + aPanelSelect[ _nComdCol ] < Len( aPanelSelect[ _cComdLine ] )
+               aPanelSelect[ _nComdColNo ]++
             ENDIF
          ENDIF
 
@@ -324,403 +418,165 @@ STATIC PROCEDURE Prompt()
 
       CASE K_HOME
 
-         aPanelSelect[ _HC_nComdCol ] := 0
+         aPanelSelect[ _nComdCol ] := 0
 
          EXIT
 
       CASE K_END
 
-         aPanelSelect[ _HC_nComdCol ] := Len( aPanelSelect[ _HC_cComdLine ] )
+         aPanelSelect[ _nComdCol ] := Len( aPanelSelect[ _cComdLine ] )
 
          EXIT
 
       CASE K_PGUP
 
-         IF aPanelSelect[ _HC_nRowBar ] <= 1
-            IF aPanelSelect[ _HC_nRowNo ] - nMaxRow >= 0
-               aPanelSelect[ _HC_nRowNo ] -= nMaxRow
+         IF aPanelSelect[ _nRowBar ] <= 1
+            IF aPanelSelect[ _nRowNo ] - nMaxRow >= 0
+               aPanelSelect[ _nRowNo ] -= nMaxRow
             ENDIF
          ENDIF
 
-         aPanelSelect[ _HC_nRowBar ] := 1
+         aPanelSelect[ _nRowBar ] := 1
          EXIT
 
       CASE K_PGDN
 
-         IF aPanelSelect[ _HC_nRowBar ] >= nMaxRow - 3
-            IF aPanelSelect[ _HC_nRowNo ] + nMaxRow  <= Len( aPanelSelect[ _HC_aArray ] )
-               aPanelSelect[ _HC_nRowNo ] += nMaxRow
+         IF aPanelSelect[ _nRowBar ] >= nMaxRow - 3
+            IF aPanelSelect[ _nRowNo ] + nMaxRow  <= Len( aPanelSelect[ _aDirectory ] )
+               aPanelSelect[ _nRowNo ] += nMaxRow
             ENDIF
          ENDIF
 
-         aPanelSelect[ _HC_nRowBar ] := Min( nMaxRow - 3, Len( aPanelSelect[ _HC_aArray ] ) - aPanelSelect[ _HC_nRowNo ] )
+         aPanelSelect[ _nRowBar ] := Min( nMaxRow - 3, Len( aPanelSelect[ _aDirectory ] ) - aPanelSelect[ _nRowNo ] )
+         EXIT
+
+      CASE K_INS
+
+         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
+         IF aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
+
+            /* oznaczam stan usunięcia aktualnego elementu w tablicy */
+            IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
+               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
+            ELSE
+               /* zwracam stan usunięcia aktualnego elementu w tablicy */
+               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
+            ENDIF
+
+            IF aPanelSelect[ _nRowBar ] < aPanelSelect[ _nBottom ] - 1 .AND. aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
+               ++aPanelSelect[ _nRowBar ]
+            ELSE
+               IF aPanelSelect[ _nRowNo ] + aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
+                  ++aPanelSelect[ _nRowNo ]
+               ENDIF
+            ENDIF
+
+         ENDIF
+
          EXIT
 
       CASE K_DEL
 
-         IF aPanelSelect[ _HC_nComdCol ] >= 0
-            aPanelSelect[ _HC_cComdLine ] := Stuff( aPanelSelect[ _HC_cComdLine ], aPanelSelect[ _HC_nComdCol ] + 1, 1, "" )
+         IF aPanelSelect[ _nComdCol ] >= 0
+            aPanelSelect[ _cComdLine ] := Stuff( aPanelSelect[ _cComdLine ], aPanelSelect[ _nComdCol ] + 1, 1, "" )
          ENDIF
 
          EXIT
 
       CASE K_BS
 
-         IF aPanelSelect[ _HC_nComdCol ] > 0
-            aPanelSelect[ _HC_cComdLine ] := Stuff( aPanelSelect[ _HC_cComdLine ], aPanelSelect[ _HC_nComdCol ], 1, "" )
-            aPanelSelect[ _HC_nComdCol ]--
+         IF aPanelSelect[ _nComdCol ] > 0
+            aPanelSelect[ _cComdLine ] := Stuff( aPanelSelect[ _cComdLine ], aPanelSelect[ _nComdCol ], 1, "" )
+            aPanelSelect[ _nComdCol ]--
          ENDIF
+
+         EXIT
+
+      CASE K_F1
+
+         EXIT
+
+      CASE K_F2
 
          EXIT
 
       CASE K_F3
 
-         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-         /* jeżeli stoimy na pliku */
-         IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-
-            HCEdit( aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ], .F. )
-
-         ELSE
-            aDirScan := hb_DirScan( aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ], hb_osFileMask() )
-            AScan( aDirScan, {| x | nLengthName := Max( nLengthName, Len( x[ 1 ] ) ) } )
-
-            FOR EACH aItem IN aDirScan
-               AAdd( aTarget, ;
-                  PadR( aItem[ F_NAME ], nLengthName ) + " " + ;
-                  Transform( hb_ntos( aItem[ F_SIZE ] ), "9 999 999 999" ) + " " + ;
-                  hb_TToC( aItem[ F_DATE ] ) + " " + ;
-                  aItem[ F_ATTR ] )
-            NEXT
-
-            SaveFile( aTarget, "DirScan.txt" ) // ?
-
-            HCEdit( "DirScan.txt", .F. )
-         ENDIF
+         FunctionKey_F3( aPanelSelect )
 
          EXIT
 
       CASE K_F4
 
-         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-         /* jeżeli stoimy na pliku */
-         IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-            HCEdit( aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ], .T. )
-         ELSE
-            HC_Alert( "No file selected!",, 0x70 )
-         ENDIF
+         FunctionKey_F4( aPanelSelect )
 
          EXIT
 
       CASE K_F5
 
-         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-         IF aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] == ".."
-            HC_Alert( "The item to be copy has not been selected.",, 0x70 )
-         ELSE
-
-            IF aPanelSelect == aPanelLeft
-               /* jeżeli stoimy na pliku */
-               IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-                  IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelRight[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
-
-                     IF HC_CopyFile( aPanelLeft[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelRight[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] ) == 0
-
-                        PanelRefresh( aPanelRight )
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-
-                  ENDIF
-               ELSE
-                  IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelRight[ _HC_cDir ], { "Yes", "No!" } ) )
-
-                     IF CopyDirectory( aPanelLeft[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelRight[ _HC_cDir ] ) == 0 // ?
-
-                        PanelRefresh( aPanelRight )
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ELSE
-               /* jeżeli stoimy na pliku */
-               IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-                  IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelLeft[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
-
-                     IF HC_CopyFile( aPanelRight[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelLeft[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] ) == 0
-
-                        PanelRefresh( aPanelLeft )
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-                  ENDIF
-               ELSE
-                  IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelLeft[ _HC_cDir ], { "Yes", "No!" } ) )
-
-                     IF CopyDirectory( aPanelRight[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelLeft[ _HC_cDir ] ) == 0 // ?
-
-                        PanelRefresh( aPanelLeft )
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ENDIF
-         ENDIF
+         FunctionKey_F5( aPanelSelect )
 
          EXIT
 
       CASE K_F6
 
-         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-         IF aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] == ".."
-            HC_Alert( "The item to be copy has not been selected.",, 0x70 )
-         ELSE
-
-            IF aPanelSelect == aPanelLeft
-               /* jeżeli stoimy na pliku */
-               IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-                  IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelRight[ _HC_cDir ], { "Yes", "No!" } ) )
-
-                     IF HC_CopyFile( aPanelLeft[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelRight[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] ) == 0
-
-                        PanelRefresh( aPanelRight )
-
-                        IF hb_DirRemoveAll( aPanelLeft[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] ) == .T.
-
-                           PanelRefresh( aPanelLeft )
-
-                        ELSE
-                           IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                              HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                           ELSE
-                              HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                           ENDIF
-                        ENDIF
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-
-                  ENDIF
-               ELSE
-                  IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelRight[ _HC_cDir ], { "Yes", "No!" } ) )
-
-                     IF CopyDirectory( aPanelLeft[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelRight[ _HC_cDir ] ) == 0 // ?
-
-                        PanelRefresh( aPanelRight )
-
-                        IF hb_DirRemoveAll( aPanelLeft[ _HC_cDir ] + aPanelLeft[ _HC_aArray ][ nPos ][ F_NAME ] ) == .T.
-
-                           PanelRefresh( aPanelLeft )
-
-                        ELSE
-                           IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                              HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                           ELSE
-                              HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                           ENDIF
-                        ENDIF
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ELSE
-               /* jeżeli stoimy na pliku */
-               IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-                  IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelLeft[ _HC_cDir ], { "Yes", "No!" } ) )
-
-                     IF HC_CopyFile( aPanelRight[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelLeft[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] ) == 0
-
-                        PanelRefresh( aPanelLeft )
-
-                        IF hb_DirRemoveAll( aPanelRight[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] ) == .T.
-
-                           PanelRefresh( aPanelRight )
-
-                        ELSE
-                           IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                              HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                           ELSE
-                              HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                           ENDIF
-                        ENDIF
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-                  ENDIF
-               ELSE
-                  IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + " to", ;
-                        aPanelLeft[ _HC_cDir ], { "Yes", "No!" } ) )
-
-                     IF CopyDirectory( aPanelRight[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ], ;
-                           aPanelLeft[ _HC_cDir ] ) == 0 // ?
-
-                        PanelRefresh( aPanelLeft )
-
-                        IF hb_DirRemoveAll( aPanelRight[ _HC_cDir ] + aPanelRight[ _HC_aArray ][ nPos ][ F_NAME ] ) == .T.
-
-                           PanelRefresh( aPanelRight )
-
-                        ELSE
-                           IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                              HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                           ELSE
-                              HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                           ENDIF
-                        ENDIF
-
-                     ELSE
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                        ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                        ENDIF
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ENDIF
-         ENDIF
-
-         /* jeżeli usuniemy będąc wskaźnikiem RowBar na ostatniej pozycji to - 1 */
-         IF Len( aPanelSelect[ _HC_aArray ] ) < aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-            aPanelSelect[ _HC_nRowBar ] -= 1
-         ENDIF
+         FunctionKey_F6( aPanelSelect )
 
          EXIT
 
       CASE K_F7
 
-         IF HB_ISSTRING( cNewDir := MsgBox( "Create the directory.", NIL, { "Yes", "No!" } ) )
-            IF hb_vfDirMake( aPanelSelect[ _HC_cDir ] + cNewDir ) == 0
-
-               PanelRefresh( aPanelSelect )
-
-            ELSE
-               IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                  HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-               ELSE
-                  HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-               ENDIF
-            ENDIF
-         ENDIF
+         FunctionKey_F7( aPanelSelect )
 
          EXIT
 
       CASE K_F8
 
-         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
+         FunctionKey_F8( aPanelSelect )
 
-         IF aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] == ".."
-            HC_Alert( "The item to be deleted has not been selected.",, 0x70 )
-         ELSE
-            nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-            /* jeżeli stoimy na pliku */
-            IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
-               IF HC_Alert( "Do you really want to delete the selected file ;" + '"' + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] + '"', { "Yes", "No!" }, 0x70 ) == 1
-                  IF hb_vfErase( aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] ) == 0
+         EXIT
 
-                     PanelRefresh( aPanelSelect )
+      CASE K_F9
 
-                  ELSE
-                     IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                        HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                     ELSE
-                        HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ELSE
-               IF HC_Alert( "Do you really want to delete the selected directory ;" + '"' + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] + '"', { "Yes", "No!" }, 0x70 ) == 1
-                  IF hb_vfDirRemove( aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] ) == 0
+         EXIT
 
-                     PanelRefresh( aPanelSelect )
+      CASE K_F10
+         lContinue := .F.
+         EXIT
 
-                  ELSE
-                     IF HC_Alert( "The following subdirectory is not empty. ;" + ;
-                           '"' + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] + '"' + ";" + ;
-                           "Do you still wish to delete it?", { "Delete", "No!" } ) == 1
+      CASE K_ALT_F1
+         /* ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
+         AllDrives() zwraca tablicę */
+         IF ( cNewDrive := HC_Alert( "Drive letter", "Choose left drive:", AllDrives(), 0x8a, 0x0 ) ) != 0
 
-                        IF hb_DirRemoveAll( aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ] ) == .T.
+            hb_CurDrive( AllDrives()[ cNewDrive ] )
+            PanelFetchList( aPanelLeft, hb_cwd() )
+            PanelDisplay( aPanelLeft )
 
-                           PanelRefresh( aPanelSelect )
-
-                        ELSE
-                           IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                              HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
-                           ELSE
-                              HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
-                           ENDIF
-                        ENDIF
-                     ENDIF
-                  ENDIF
-               ENDIF
-            ENDIF
          ENDIF
 
-         /* jeżeli usuniemy będąc wskaźnikiem RowBar + RowNo na ostatniej pozycji to - 1 */
-         IF Len( aPanelSelect[ _HC_aArray ] ) < aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
-            aPanelSelect[ _HC_nRowBar ] -= 1
+         EXIT
+
+      CASE K_ALT_F2
+         /* ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
+         AllDrives() zwraca tablicę */
+         IF ( cNewDrive := HC_Alert( "Drive letter", "Choose right drive:", AllDrives(), 0x8a, 0x1 ) ) != 0
+
+            hb_CurDrive( AllDrives()[ cNewDrive ] )
+            PanelFetchList( aPanelRight, hb_cwd() )
+            PanelDisplay( aPanelRight )
+
          ENDIF
+
          EXIT
 
       CASE K_SH_F4
 
-         nPos := aPanelSelect[ _HC_nRowBar ] + aPanelSelect[ _HC_nRowNo ]
+         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
          /* jeżeli stoimy na pliku */
-         IF At( "D", aPanelSelect[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
+         IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 
-            IF HB_ISSTRING( cFileName := MsgBox( "Create file.", aPanelSelect[ _HC_cDir ] + aPanelSelect[ _HC_aArray ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( cFileName := MsgBox( "Create file.", aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
                IF hb_vfExists( cFileName )
 
                   HCEdit( cFileName, .T. )
@@ -729,10 +585,10 @@ STATIC PROCEDURE Prompt()
                   IF ( pHandle := hb_vfOpen( cFileName, FO_CREAT + FO_TRUNC + FO_WRITE ) ) != NIL
 
                      IF ! hb_vfClose( pHandle )
-                        IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                           HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
+                        IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                           HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
                         ELSE
-                           HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
+                           HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
                         ENDIF
                      ENDIF
 
@@ -740,10 +596,10 @@ STATIC PROCEDURE Prompt()
 
                   ELSE
 
-                     IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                        HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
+                     IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
                      ELSE
-                        HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
                      ENDIF
 
                   ENDIF
@@ -754,13 +610,13 @@ STATIC PROCEDURE Prompt()
          ELSE
             /* jeżeli stoimy na katalogu */
             IF HB_ISSTRING( cFileName := MsgBox( "Create file.", NIL, { "Yes", "No!" } ) )
-               IF ( pHandle := hb_vfOpen( aPanelSelect[ _HC_cDir ] + cFileName, FO_CREAT + FO_TRUNC + FO_WRITE ) ) != NIL
+               IF ( pHandle := hb_vfOpen( aPanelSelect[ _cCurrentDir ] + cFileName, FO_CREAT + FO_TRUNC + FO_WRITE ) ) != NIL
 
                   IF ! hb_vfClose( pHandle )
-                     IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                        HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
+                     IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
                      ELSE
-                        HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
                      ENDIF
                   ENDIF
 
@@ -768,10 +624,10 @@ STATIC PROCEDURE Prompt()
 
                ELSE
 
-                  IF ( nErrorCode := AScan( aFError, {| x | x[ 1 ] == FError() } ) ) > 0
-                     HC_Alert( "Cannot make file, error: ; ;" + aFError[ nErrorCode ][ MEANING ] )
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
                   ELSE
-                     HC_Alert( "Cannot make file, error: ; ;" + hb_ntos( FError() ) )
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
                   ENDIF
 
                ENDIF
@@ -785,11 +641,11 @@ STATIC PROCEDURE Prompt()
 
          IF ( nKeyStd >= 32 .AND. nKeyStd <= 126 ) .OR. ( nKeyStd >= 160 .AND. nKeyStd <= 255 ) .OR. ! hb_keyChar( nKeyStd ) == ""
 
-            aPanelSelect[ _HC_cComdLine ] := Stuff( aPanelSelect[ _HC_cComdLine ], aPanelSelect[ _HC_nComdCol ] + aPanelSelect[ _HC_nComdColNo ] + 1, 0, hb_keyChar( nKeyStd ) )
-            IF aPanelSelect[ _HC_nComdCol ] < nMaxCol
-               aPanelSelect[ _HC_nComdCol ]++
+            aPanelSelect[ _cComdLine ] := Stuff( aPanelSelect[ _cComdLine ], aPanelSelect[ _nComdCol ] + aPanelSelect[ _nComdColNo ] + 1, 0, hb_keyChar( nKeyStd ) )
+            IF aPanelSelect[ _nComdCol ] < nMaxCol - Len( aPanelSelect[ _cCurrentDir ] )
+               aPanelSelect[ _nComdCol ]++
             ELSE
-               aPanelSelect[ _HC_nComdColNo ]++
+               aPanelSelect[ _nComdColNo ]++
             ENDIF
 
          ENDIF
@@ -800,6 +656,396 @@ STATIC PROCEDURE Prompt()
 
    RETURN
 
+// STATIC PROCEDURE FunctionKey_F1( aPanel )
+// RETURN
+
+// STATIC PROCEDURE FunctionKey_F2( aPanel )
+// RETURN
+
+STATIC PROCEDURE FunctionKey_F3( aPanel )
+
+   LOCAL nPos
+   LOCAL aTarget := {}, aItem, aDirScan
+   LOCAL nLengthName := 0
+
+   nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+   /* jeżeli stoimy na pliku */
+   IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+
+      HCEdit( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ], .F. )
+
+   ELSE
+      aDirScan := hb_DirScan( aPanel[ _aDirectory ][ nPos ][ F_NAME ], hb_osFileMask() )
+      AScan( aDirScan, {| x | nLengthName := Max( nLengthName, Len( x[ 1 ] ) ) } )
+
+      FOR EACH aItem IN aDirScan
+         AAdd( aTarget, ;
+            PadR( aItem[ F_NAME ], nLengthName ) + " " + ;
+            Transform( hb_ntos( aItem[ F_SIZE ] ), "9 999 999 999" ) + " " + ;
+            hb_TToC( aItem[ F_DATE ] ) + " " + ;
+            aItem[ F_ATTR ] )
+      NEXT
+
+      SaveFile( aTarget, "DirScan.txt" ) // gdzie zapisywać ?
+
+      HCEdit( "DirScan.txt", .F. )
+   ENDIF
+
+   RETURN
+
+STATIC PROCEDURE FunctionKey_F4( aPanel )
+
+   LOCAL nPos
+
+   nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+   /* jeżeli stoimy na pliku przejdź do edycji */
+   IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+      HCEdit( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ], .T. )
+   ELSE
+      HC_Alert( "No file selected", "Select the file to edit",, 0x8f )
+   ENDIF
+
+   RETURN
+
+STATIC PROCEDURE FunctionKey_F5( aPanel )
+
+   LOCAL nPos
+   LOCAL nErrorCode
+
+   nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+   IF aPanel[ _aDirectory ][ nPos ][ F_NAME ] == ".."
+      HC_Alert( "Copy", "The item to be copy has not been selected.",, 0x8f )
+   ELSE
+
+      IF aPanel == aPanelLeft
+         /* jeżeli stoimy na pliku */
+         IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+            IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelRight[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
+
+               // IF hb_vfCopyFile( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
+               IF HC_CopyFile( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelRight[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+
+                  PanelRefresh( aPanelRight )
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The file can not be copied;" + FileError()[ nErrorCode ][ MEANING ] )
+
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The file can not be copied;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+
+            ENDIF
+         ELSE
+            IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelRight[ _cCurrentDir ], { "Yes", "No!" } ) )
+
+               IF HC_CopyDirectory( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelRight[ _cCurrentDir ] ) == 0 // ?
+
+                  PanelRefresh( aPanelRight )
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The directory can not be copied;" + FileError()[ nErrorCode ][ MEANING ] )
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The directory can not be copied;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+            ENDIF
+         ENDIF
+      ELSE
+         /* jeżeli stoimy na pliku */
+         IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+            IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelLeft[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
+
+               IF HC_CopyFile( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelLeft[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+
+                  PanelRefresh( aPanelLeft )
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The file can not be copied;" + FileError()[ nErrorCode ][ MEANING ] )
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The file can not be copied;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+            ENDIF
+         ELSE
+            IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelLeft[ _cCurrentDir ], { "Yes", "No!" } ) )
+
+               IF HC_CopyDirectory( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelLeft[ _cCurrentDir ] ) == 0 // ?
+
+                  PanelRefresh( aPanelLeft )
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The directory can not be copied;" + FileError()[ nErrorCode ][ MEANING ] )
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;The directory can not be copied;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+            ENDIF
+         ENDIF
+      ENDIF
+   ENDIF
+
+   RETURN
+
+STATIC PROCEDURE FunctionKey_F6( aPanel )
+
+   LOCAL nPos
+   LOCAL nErrorCode
+
+   nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+   IF aPanel[ _aDirectory ][ nPos ][ F_NAME ] == ".."
+      HC_Alert( "Rename or move", "The item to be copy has not been selected.",, 0x8f )
+   ELSE
+
+      IF aPanel == aPanelLeft
+         /* jeżeli stoimy na pliku */
+         IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+            IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelRight[ _cCurrentDir ], { "Yes", "No!" } ) )
+
+               IF HC_CopyFile( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelRight[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+
+                  PanelRefresh( aPanelRight )
+
+                  IF hb_DirRemoveAll( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+
+                     PanelRefresh( aPanelLeft )
+
+                  ELSE
+                     IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                     ELSE
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
+                     ENDIF
+                  ENDIF
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;annot make file, error:;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+
+            ENDIF
+         ELSE
+            IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelRight[ _cCurrentDir ], { "Yes", "No!" } ) )
+
+               IF HC_CopyDirectory( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelRight[ _cCurrentDir ] ) == 0 // ?
+
+                  PanelRefresh( aPanelRight )
+
+                  IF hb_DirRemoveAll( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+
+                     PanelRefresh( aPanelLeft )
+
+                  ELSE
+                     IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                     ELSE
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + hb_ntos( FError() ) )
+                     ENDIF
+                  ENDIF
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+            ENDIF
+         ENDIF
+      ELSE
+         /* jeżeli stoimy na pliku */
+         IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+            IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelLeft[ _cCurrentDir ], { "Yes", "No!" } ) )
+
+               IF HC_CopyFile( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelLeft[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+
+                  PanelRefresh( aPanelLeft )
+
+                  IF hb_DirRemoveAll( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+
+                     PanelRefresh( aPanelRight )
+
+                  ELSE
+                     IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                     ELSE
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
+                     ENDIF
+                  ENDIF
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+            ENDIF
+         ELSE
+            IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanelLeft[ _cCurrentDir ], { "Yes", "No!" } ) )
+
+               IF HC_CopyDirectory( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanelLeft[ _cCurrentDir ] ) == 0 // ?
+
+                  PanelRefresh( aPanelLeft )
+
+                  IF hb_DirRemoveAll( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+
+                     PanelRefresh( aPanelRight )
+
+                  ELSE
+                     IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                     ELSE
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + hb_ntos( FError() ) )
+                     ENDIF
+                  ENDIF
+
+               ELSE
+                  IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                  ELSE
+                     HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + hb_ntos( FError() ) )
+                  ENDIF
+               ENDIF
+            ENDIF
+         ENDIF
+      ENDIF
+   ENDIF
+
+   /* jeżeli usuniemy będąc wskaźnikiem RowBar na ostatniej pozycji to - 1 */
+// IF Len( aPanel[ _aDirectory ] ) < aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+// aPanel[ _nRowBar ] -= 1
+// ENDIF
+
+   RETURN
+
+STATIC PROCEDURE FunctionKey_F7( aPanel )
+
+   LOCAL cNewDir
+   LOCAL nErrorCode
+
+   IF HB_ISSTRING( cNewDir := MsgBox( "Create the directory.", NIL, { "Yes", "No!" } ) )
+      IF hb_vfDirMake( aPanel[ _cCurrentDir ] + cNewDir ) == 0
+
+         PanelRefresh( aPanel )
+
+      ELSE
+         IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+            HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+         ELSE
+            HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + hb_ntos( FError() ) )
+         ENDIF
+      ENDIF
+   ENDIF
+
+   RETURN
+
+STATIC PROCEDURE FunctionKey_F8( aPanel )
+
+   LOCAL nPos
+   LOCAL nErrorCode
+
+   nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+
+   IF aPanel[ _aDirectory ][ nPos ][ F_NAME ] == ".."
+      HC_Alert( "Up Directory", "The item to be deleted has not been selected." )
+   ELSE
+      nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+      /* jeżeli stoimy na pliku */
+      IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+
+         /* oznaczam stan usunięcia aktualnego elementu w tablicy */
+         IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
+            aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
+         ENDIF
+
+         PanelDisplay( aPanel )
+
+         IF HC_Alert( "Delete file", "Do you really want to delete the selected file:;" + '"' + aPanel[ _aDirectory ][ nPos ][ F_NAME ] + '"', { "Yes", "No!" } ) == 1
+
+            // IF hb_vfErase( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+            IF HC_DeleteFile( aPanelSelect ) == 0
+
+               PanelRefresh( aPanel )
+
+            ELSE
+               IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                  HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+               ELSE
+                  HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make file, error:;" + hb_ntos( FError() ) )
+               ENDIF
+            ENDIF
+         ELSE
+            /* zwracam stan usunięcia aktualnego elementu w tablicy */
+            aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
+         ENDIF
+
+      ELSE
+         /* jeżeli stoimy na katalogu */
+         IF HC_Alert( "Down Directory", "Do you really want to delete the selected directory:;" + '"' + aPanel[ _aDirectory ][ nPos ][ F_NAME ] + '"', { "Yes", "No!" }, 0x9f ) == 1
+            IF hb_vfDirRemove( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+
+               PanelRefresh( aPanel )
+
+            ELSE
+               IF HC_Alert( "Down Directory", "The following subdirectory is not empty. ;" + ;
+                     '"' + aPanel[ _aDirectory ][ nPos ][ F_NAME ] + '"' + ";" + ;
+                     "Do you still wish to delete it?", { "Delete", "No!" } ) == 1
+
+                  IF hb_DirRemoveAll( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+
+                     PanelRefresh( aPanel )
+
+                  ELSE
+                     IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + FileError()[ nErrorCode ][ MEANING ] )
+                     ELSE
+                        HC_Alert( "Error", "Test for errors after a binary file operation.;Cannot make directory, error:;" + hb_ntos( FError() ) )
+                     ENDIF
+                  ENDIF
+               ENDIF
+            ENDIF
+         ENDIF
+      ENDIF
+   ENDIF
+
+
+   /* jeżeli usuniemy będąc wskaźnikiem RowBar + RowNo na ostatniej pozycji to - 1 */
+// IF Len( aPanel[ _aDirectory ] ) < aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+// aPanel[ _nRowBar ] -= 1
+// ENDIF
+
+   RETURN
+
+// STATIC PROCEDURE FunctionKey_F9( aPanel )
+// RETURN
+
+// STATIC PROCEDURE FunctionKey_F10( aPanel )
+// RETURN
+
 STATIC FUNCTION HC_CopyFile( cSourceFile, cTargetFile )
 
    LOCAL nRow, nCol
@@ -807,16 +1053,19 @@ STATIC FUNCTION HC_CopyFile( cSourceFile, cTargetFile )
    LOCAL nTop, nLeft, nBottom, nRight
    LOCAL cScreen
    LOCAL nReturn := 0
+   LOCAL nMaxRow := MaxRow(), nMaxCol := MaxCol()
    LOCAL pSource
    LOCAL pTarget
    LOCAL nPosition
    LOCAL nBufferSize := 65536
    LOCAL cBuffer
+   LOCAL tsDateTime
+   LOCAL nFileSize
 
    nWidth := Max( Len( cSourceFile ), Len( cTargetFile ) ) + 2
 
-   nRow := Int( MaxRow() / 3 )
-   nCol := Int( ( MaxCol() - nWidth ) / 2 )
+   nRow := Int( nMaxRow / 3 )
+   nCol := Int( ( nMaxCol - nWidth ) / 2 )
 
    nTop    := nRow
    nLeft   := nCol - 1
@@ -824,66 +1073,76 @@ STATIC FUNCTION HC_CopyFile( cSourceFile, cTargetFile )
    nRight  := nCol + nWidth
 
    cScreen := SaveScreen( nTop, nLeft, nBottom + 1, nRight + 2 )
-   hb_DispBox( nTop, nLeft, nBottom, nRight, HB_B_DOUBLE_UNI + " ", 0x70 )
+   hb_DispBox( nTop, nLeft, nBottom, nRight, HB_B_DOUBLE_UNI + " ", 0x8f )
    hb_Shadow( nTop, nLeft, nBottom, nRight )
 
    cBuffer := Space( nBufferSize )
 
-   /* file is opened for reading */
-   pSource := hb_vfOpen( cSourceFile, FO_READ )
-   IF FError() != 0
-      RETURN FError()
-   ENDIF
+   /* file is opened for reading, do not deny any further attempts to open the file */
+   IF ( pSource := hb_vfOpen( cSourceFile, FO_READ + FO_SHARED + FXO_SHARELOCK ) ) != NIL
 
-   /* create and open file, open with truncation, file is opened for writing */
-   pTarget := hb_vfOpen( cTargetFile, FO_CREAT + FO_TRUNC + FO_WRITE ) // ?
-   IF FError() != 0
-      hb_vfClose( pSource )
-      RETURN FError()
-   ENDIF
+      /* shared lock, file is opened for writing, deny further attempts to open the file, emulate DOS SH_DENY* mode in POSIX OS */
+      IF ( pTarget := hb_vfOpen( cTargetFile, HB_FO_CREAT + FO_WRITE + FO_EXCLUSIVE + FXO_SHARELOCK ) ) != NIL
 
-   hb_DispOutAt( ++nRow, nCol, PadC( "Copying the file", nWidth ), 0x70 )
-   hb_DispOutAt( ++nRow, nCol, PadC( cSourceFile, nWidth ), 0x70 )
-   hb_DispOutAt( ++nRow, nCol, PadC( "to", nWidth ), 0x70 )
-   hb_DispOutAt( ++nRow, nCol, PadC( cTargetFile, nWidth ), 0x70 )
+         hb_DispOutAt( ++nRow, nCol, PadC( "Copying the file", nWidth ), 0x8f )
+         hb_DispOutAt( ++nRow, nCol, PadC( cSourceFile, nWidth ), 0x8f )
+         hb_DispOutAt( ++nRow, nCol, PadC( "to", nWidth ), 0x8f )
+         hb_DispOutAt( ++nRow, nCol, PadC( cTargetFile, nWidth ), 0x8f )
 
-   /*  FS_SET Seek from beginning of file, FS_END Seek from end of file */
-   nPosition := hb_vfSeek( pSource, FS_SET, FS_END )
-   hb_vfSeek( pSource, FS_SET )
+         /* FS_SET Seek from beginning of file, FS_END Seek from end of file */
+         nPosition := hb_vfSeek( pSource, FS_SET, FS_END )
+         nFileSize := nPosition
 
-   DO WHILE ( nPosition > FS_SET )
+         hb_vfSeek( pSource, FS_SET )
 
-      IF nPosition < nBufferSize
-         nBufferSize := nPosition
-      ENDIF
+         DO WHILE ( nPosition > FS_SET )
 
-      IF nBufferSize != hb_vfRead( pSource, @cBuffer, nBufferSize )
+            IF nPosition < nBufferSize
+               nBufferSize := nPosition
+            ENDIF
+
+            IF nBufferSize != hb_vfRead( pSource, @cBuffer, nBufferSize )
+               nReturn := FError()
+               EXIT
+            ENDIF
+            IF nBufferSize != hb_vfWrite( pTarget, @cBuffer, nBufferSize )
+               nReturn := FError()
+               EXIT
+            ENDIF
+
+            nPosition -= nBufferSize
+
+            DispBegin()
+            hb_DispOutAt( ++nRow, nCol, PadC( hb_ntos( 100 * ( nFileSize - nPosition ) / nFileSize ) + " %", nWidth ), 0x8a )
+
+            hb_DispOutAt( ++nRow, nCol, Replicate( " ", nWidth ), 0x0 )
+            hb_DispOutAt(   nRow, nCol, Replicate( " ", nWidth * ( nFileSize - nPosition ) / nFileSize ), 0x22 )
+
+            DispEnd()
+            nRow := Int( nMaxRow / 3 ) + 4
+
+         ENDDO
+
+         hb_vfClose( pTarget )
+         hb_vfClose( pSource )
+
+         /* pobierz datę czas pliku, ustaw datę czas pliku */
+         hb_vfTimeGet( cSourceFile, @tsDateTime )
+         hb_vfTimeSet( cTargetFile, tsDateTime )
+
+      ELSE
+
+         hb_vfClose( pSource )
          nReturn := FError()
-         EXIT
+
       ENDIF
-      IF nBufferSize != hb_vfWrite( pTarget, @cBuffer, nBufferSize )
-         nReturn := FError()
-         EXIT
-      ENDIF
-
-      nPosition -= nBufferSize
-
-      hb_DispOutAt( ++nRow, nCol, PadC( hb_ntos( ( nBufferSize - nPosition ) / nPosition ) + " %", nWidth ), 0x70 )
-      hb_DispOutAt( ++nRow, nCol, Replicate( " ", nWidth ), 0x0 )
-      hb_DispOutAt(   nRow, nCol, Replicate( " ", nWidth ), 0x22 )
-
-      nRow := Int( MaxRow() / 3 ) + 4
-
-   ENDDO
-
-   hb_vfClose( pTarget )
-   hb_vfClose( pSource )
+   ENDIF
 
    RestScreen( nTop, nLeft, nBottom + 1, nRight + 2, cScreen )
 
    RETURN nReturn
 
-STATIC FUNCTION CopyDirectory( cSourceFile, cTargetFile )
+STATIC FUNCTION HC_CopyDirectory( cSourceFile, cTargetFile )
 
    LOCAL aCatalog
    LOCAL nRows
@@ -902,7 +1161,7 @@ STATIC FUNCTION CopyDirectory( cSourceFile, cTargetFile )
       IF aCatalog[ i ][ F_NAME ] == "." .OR. aCatalog[ i ][ F_NAME ] == ".."
 
       ELSEIF aCatalog[ i ][ F_ATTR ] == "D"
-         IF CopyDirectory( cSourceFile + hb_ps() + aCatalog[ i ][ F_NAME ], cTargetFile + cSubCat + hb_ps() ) == -1
+         IF HC_CopyDirectory( cSourceFile + hb_ps() + aCatalog[ i ][ F_NAME ], cTargetFile + cSubCat + hb_ps() ) == -1
             RETURN FError()
          ENDIF
       ELSE
@@ -917,36 +1176,59 @@ STATIC FUNCTION CopyDirectory( cSourceFile, cTargetFile )
 
    RETURN 0
 
+STATIC FUNCTION HC_DeleteFile( aPanel )  // ?
+
+   LOCAL i
+
+   FOR i := 1 TO Len( aPanel[ _aDirectory ] )
+
+      IF aPanel[ _aDirectory ][ i ][ F_STATUS ] == .F.
+
+         DO WHILE hb_vfErase( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ i ][ F_NAME ] ) == -1 // ?
+            RETURN FError()
+         ENDDO
+
+         /* jeżeli usuniemy będąc wskaźnikiem RowBar lub RowBar + RowNo na ostatniej pozycji to - 1 */
+         // IF Len( aPanel[ _aDirectory ] ) < aPanel[ _nRowBar ] + aPanel[ _nRowNo ]       // jak usunąć nRowNo nRowBar ?
+         aPanel[ _nRowBar ] -= 1
+         // ENDIF
+
+      ENDIF
+
+   NEXT
+
+   RETURN 0
+
 STATIC PROCEDURE PanelDisplay( aPanel )
 
    LOCAL nRow, nPos := 1
    LOCAL nLengthName := 0, nLengthSize := 0
 
-   AScan( aPanel[ _HC_aArray ], {| x | ;
+   AScan( aPanel[ _aDirectory ], {| x | ;
       nLengthName := Max( nLengthName, Len( x[ 1 ] ) ), ;
       nLengthSize := Max( nLengthSize, Len( Str( x[ 2 ] ) ) ) } )
 
    DispBegin()
    IF aPanelSelect == aPanel
-      hb_DispBox( aPanel[ _HC_nTop ], aPanel[ _HC_nLeft ], aPanel[ _HC_nBottom ], aPanel[ _HC_nRight ], HB_B_DOUBLE_UNI + " ", 0x1f )
+      hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ], HB_B_DOUBLE_UNI + " ", 0x1f )
    ELSE
-      hb_DispBox( aPanel[ _HC_nTop ], aPanel[ _HC_nLeft ], aPanel[ _HC_nBottom ], aPanel[ _HC_nRight ], HB_B_SINGLE_UNI + " ", 0x1f )
+      hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ], HB_B_SINGLE_UNI + " ", 0x1f )
    ENDIF
 
-   nPos += aPanel[ _HC_nRowNo ]
-   FOR nRow := aPanel[ _HC_nTop ] + 1 TO aPanel[ _HC_nBottom ] -1
+   nPos += aPanel[ _nRowNo ]
+   FOR nRow := aPanel[ _nTop ] + 1 TO aPanel[ _nBottom ] - 1
 
-      IF nPos <= Len( aPanel[ _HC_aArray ] )
-         hb_DispOutAt( nRow, aPanel[ _HC_nLeft ] + 1, ;
-            PadR( Expression( ;
-            nLengthName, nLengthSize, ;
-            aPanel[ _HC_aArray ][ nPos ][ F_NAME ], ;
-            aPanel[ _HC_aArray ][ nPos ][ F_SIZE ], ;
-            aPanel[ _HC_aArray ][ nPos ][ F_DATE ], ;
-            aPanel[ _HC_aArray ][ nPos ][ F_ATTR ] ), ;
-            aPanel[ _HC_nRight ] - aPanel[ _HC_nLeft ] -1 ), ;
-            iif( aPanelSelect == aPanel .AND. nPos == aPanel[ _HC_nRowBar ] + aPanel[ _HC_nRowNo ], 0x30, ColoringSyntax( ;
-            aPanel[ _HC_aArray ][ nPos ][ F_ATTR ] ) ) )
+      IF nPos <= Len( aPanel[ _aDirectory ] )
+         hb_DispOutAt( nRow, aPanel[ _nLeft ] + 1, ;
+            PadR( Expression( nLengthName, nLengthSize, ;
+            aPanel[ _aDirectory ][ nPos ][ F_NAME ], ;
+            aPanel[ _aDirectory ][ nPos ][ F_SIZE ], ;
+            aPanel[ _aDirectory ][ nPos ][ F_DATE ], ;
+            aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ), ;
+            aPanel[ _nRight ] - aPanel[ _nLeft ] - 1 ), ;
+            iif( aPanelSelect == aPanel .AND. nPos == aPanel[ _nRowBar ] + aPanel[ _nRowNo ], ;
+            iif( ! aPanel[ _aDirectory ][ nPos ][ F_STATUS ], 0x3e, 0x30 ), ;
+            ColoringSyntax( aPanel[ _aDirectory ][ nPos ][ F_ATTR ], aPanel[ _aDirectory ][ nPos ][ F_STATUS ] ) ) )
          ++nPos
       ELSE
          EXIT
@@ -964,102 +1246,119 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
 
    DispBegin()
 
-   hb_DispOutAt( nMaxRow -1, 0, PadR( aPanel[ _HC_cDir ] + SubStr( aPanel[ _HC_cComdLine ], 1 + aPanel[ _HC_nComdColNo ], nMaxCol + aPanel[ _HC_nComdColNo ] ), nMaxCol ) )
+   hb_DispOutAt( nMaxRow - 1, 0, ;
+      PadR( aPanel[ _cCurrentDir ] + SubStr( aPanel[ _cComdLine ], 1 + aPanel[ _nComdColNo ], nMaxCol + aPanel[ _nComdColNo ] ), nMaxCol ), 0x7 )
 
-   SetPos( nMaxRow -1, aPanel[ _HC_nComdCol ] + Len( aPanel[ _HC_cDir ] ) )
+   SetPos( nMaxRow - 1, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) )
 
    DispEnd()
 
    RETURN
 
-STATIC FUNCTION Expression( nLengthName, nLengthSize, aExp1, aExp2, aExp3, aExp4 )
+STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr )
 
-   LOCAL cStr1, cStr2, cStr3, cExp4
+   LOCAL cFileName, cFileSize, dFileDate, cFileAttr
 
-   iif( nLengthName == 2, nLengthName := 4, nLengthName ) // ??
+   iif( nLengthName == 2, nLengthName := 4, nLengthName ) // ?
 
-   cStr1 := PadR( aExp1 + Space( nLengthName ), nLengthName ) + " "
+   cFileName := PadR( cName + Space( nLengthName ), nLengthName ) + " "
 
-   IF aExp1 == ".."
-      cStr1 := PadR( "[" + AllTrim( cStr1 ) + "]" + Space( nLengthName ), nLengthName ) + " "
+   IF cName == ".."
+      cFileName := PadR( "[" + AllTrim( cFileName ) + "]" + Space( nLengthName ), nLengthName ) + " "
    ENDIF
 
-   IF aExp4 == "D" .OR. aExp4 == "HD" .OR. aExp4 == "HSD" .OR. aExp4 == "HSDL" .OR. aExp4 == "RHSA" .OR. aExp4 == "RD" .OR. aExp4 == "AD" .OR. aExp4 == "RHD"
-      cStr2 := PadL( "DIR", nLengthSize + 3 ) + " "
+   IF cAttr == "D" .OR. cAttr == "HD" .OR. cAttr == "HSD" .OR. cAttr == "HSDL" .OR. cAttr == "RHSA" .OR. cAttr == "RD" .OR. cAttr == "AD" .OR. cAttr == "RHD"
+      cFileSize := PadL( "DIR", nLengthSize + 3 ) + " "
    ELSE
-      cStr2 := PadL( Transform( aExp2, "9 999 999 999" ), nLengthSize + 3 ) + " "
+      cFileSize := PadL( Transform( cSize, "9 999 999 999" ), nLengthSize + 3 ) + " "
    ENDIF
 
-   cStr3 := hb_TToC( aExp3 ) + " "
-   cExp4 := PadL( aExp4, 3 )
+   dFileDate := hb_TToC( dDate ) + " "
+   cFileAttr := PadL( cAttr, 3 )
 
-   RETURN cStr1 + cStr2 + cStr3 + cExp4
+   RETURN cFileName + cFileSize + dFileDate + cFileAttr
 
-STATIC FUNCTION ColoringSyntax( aExp4 )
+STATIC FUNCTION ColoringSyntax( cAttr, lStatus )
 
    LOCAL nColor
 
-   IF aExp4 == "HD" .OR. aExp4 == "HSD" .OR. aExp4 == "HSDL" .OR. aExp4 == "RHSA" .OR. aExp4 == "RD"
+   IF cAttr == "HD" .OR. cAttr == "HSD" .OR. cAttr == "HSDL" .OR. cAttr == "RHSA" .OR. cAttr == "RD"
       nColor := 0x13
    ELSE
       nColor := 0x1f
+   ENDIF
+
+   IF ! lStatus
+      nColor := 0x1e
    ENDIF
 
    RETURN nColor
 
 STATIC PROCEDURE PanelRefresh( aPanel )
 
-   IF aPanelLeft[ _HC_cDir ] == aPanelRight[ _HC_cDir ]
+   IF aPanelLeft[ _cCurrentDir ] == aPanelRight[ _cCurrentDir ]
 
-      PanelFetchList( aPanelLeft, aPanelLeft[ _HC_cDir ] )
-      PanelFetchList( aPanelRight, aPanelRight[ _HC_cDir ] )
+      PanelFetchList( aPanelLeft, aPanelLeft[ _cCurrentDir ] )
+      PanelFetchList( aPanelRight, aPanelRight[ _cCurrentDir ] )
 
       PanelDisplay( aPanelLeft )
       PanelDisplay( aPanelRight )
 
    ELSE
 
-      PanelFetchList( aPanel, aPanel[ _HC_cDir ] )
+      PanelFetchList( aPanel, aPanel[ _cCurrentDir ] )
       PanelDisplay( aPanel )
 
    ENDIF
 
    RETURN
 
-
 STATIC PROCEDURE ChangeDir( aPanel )
 
    LOCAL nPos, cDir, cDir0
    LOCAL nPosLast
 
-   nPos := aPanel[ _HC_nRowBar ] + aPanel[ _HC_nRowNo ]
-   IF At( "D", aPanel[ _HC_aArray ][ nPos ][ F_ATTR ] ) == 0
+   nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+   IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
       RETURN
    ENDIF
-   IF aPanel[ _HC_aArray ][ nPos ][ F_NAME ] == ".."
-      cDir := aPanel[ _HC_cDir ]
-      cDir0 := SubStr( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) -1 ) ) + 1 )
-      cDir0 := SubStr( cDir0, 1, Len( cDir0 ) -1 )
-      cDir  := Left( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) -1 ) ) )
-      PanelFetchlist( aPanel, cDir )
-      nPosLast := Max( AScan( aPanel[ _HC_aArray ], {| x | x[ F_NAME ] = cDir0 } ), 1 )
+   IF aPanel[ _aDirectory ][ nPos ][ F_NAME ] == ".."
+      cDir := aPanel[ _cCurrentDir ]
+      cDir0 := SubStr( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) + 1 )
+      cDir0 := SubStr( cDir0, 1, Len( cDir0 ) - 1 )
+      cDir  := Left( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) )
+      PanelFetchList( aPanel, cDir )
+      nPosLast := Max( AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == cDir0 } ), 1 )
 
-      IF nPosLast > aPanelSelect[ _HC_nBottom ] -1
-         aPanelSelect[ _HC_nRowNo ] := nPosLast % ( aPanelSelect[ _HC_nBottom ] -1 )
-         aPanelSelect[ _HC_nRowBar ] := aPanelSelect[ _HC_nBottom ] -1
+      IF nPosLast > aPanelSelect[ _nBottom ] - 1
+         aPanelSelect[ _nRowNo ] := nPosLast % ( aPanelSelect[ _nBottom ] - 1 )
+         aPanelSelect[ _nRowBar ] := aPanelSelect[ _nBottom ] - 1
       ELSE
-         aPanelSelect[ _HC_nRowNo ]  := 0
-         aPanelSelect[ _HC_nRowBar ] := nPosLast
+         aPanelSelect[ _nRowNo ]  := 0
+         aPanelSelect[ _nRowBar ] := nPosLast
       ENDIF
 
    ELSE
-      cDir := aPanel[ _HC_cDir ] + aPanel[ _HC_aArray ][ nPos ][ F_NAME ] + hb_ps()
-      aPanel[ _HC_nRowBar ] := 1
-      aPanel[ _HC_nRowNo  ] := 0
-      PanelFetchlist( aPanel, cDir )
+      cDir := aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ] + hb_ps()
+      aPanel[ _nRowBar ] := 1
+      aPanel[ _nRowNo  ] := 0
+      PanelFetchList( aPanel, cDir )
    ENDIF
 
    RETURN
+
+STATIC FUNCTION AllDrives()
+
+   LOCAL i
+   LOCAL aArrayDrives := {}
+
+   FOR i := 1 TO 26
+      IF DiskChange( Chr( i + 64 ) )
+         AAdd( aArrayDrives, Chr( i + 64 ) )
+      ENDIF
+   NEXT
+
+   RETURN aArrayDrives
 
 STATIC PROCEDURE BottomBar()
 
@@ -1147,12 +1446,12 @@ STATIC FUNCTION MsgBox( cMessage, aMessage, aOptions )
          expValue := nInitCol + Int( ( nWidth - nOpWidth ) / 2 ) + 2
          AEval( aOptionsOK, {| x | AAdd( aPosButtons, expValue ), expValue += Len( x ) + 4 } )
 
-         hb_DispBox( nMaxRow - 2, nMaxCol - 36, nMaxRow + 3, nMaxCol + 36, HB_B_SINGLE_UNI + " ", 0x70 )
+         hb_DispBox( nMaxRow - 2, nMaxCol - 36, nMaxRow + 3, nMaxCol + 36, HB_B_SINGLE_UNI + " ", 0x8f )
          hb_Shadow( nMaxRow - 2, nMaxCol - 36, nMaxRow + 3, nMaxCol + 36 )
-         hb_DispOutAt( nMaxRow - 1, nMaxCol - 34, cMessage, 0x70 )
+         hb_DispOutAt( nMaxRow - 1, nMaxCol - 34, cMessage, 0x8f )
 
          FOR i := 1 TO Len( aOptionsOK )
-            hb_DispOutAt( nMaxRow + 2, aPosButtons[ i ], " " + aOptionsOK[ i ] + " ", iif( i == nChoice, 0x07, 0x70 ) )
+            hb_DispOutAt( nMaxRow + 2, aPosButtons[ i ], " " + aOptionsOK[ i ] + " ", iif( i == nChoice, 0x07, 0x8f ) )
          NEXT
 
          MsgBoxDisplay( cString, nCol, nColNo )
@@ -1245,7 +1544,7 @@ STATIC FUNCTION MsgBox( cMessage, aMessage, aOptions )
          ENDIF
 
          FOR i := 1 TO Len( aOptionsOK )
-            hb_DispOutAt( nMaxRow + 2, aPosButtons[ i ], " " + aOptionsOK[ i ] + " ", iif( i == nChoice, 0x07, 0x70 ) )
+            hb_DispOutAt( nMaxRow + 2, aPosButtons[ i ], " " + aOptionsOK[ i ] + " ", iif( i == nChoice, 0x07, 0x8f ) )
          NEXT
 
          EXIT
@@ -1300,80 +1599,115 @@ STATIC PROCEDURE MsgBoxDisplay( cString, nCol, nColNo )
 
    RETURN
 
-FUNCTION HC_Alert( cMessage, aOptions )
+STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
    LOCAL nOldCursor := SetCursor( SC_NONE )
-   LOCAL nRowPos, nColPos
-   LOCAL aMessage
-   LOCAL nLenMessage, nLenOptions
-   LOCAL nCurrent, nWidth1, nWidth2
-   LOCAL i, nPos
-   LOCAL nCol, nRow
-   LOCAL cScreen
-   LOCAL nTop, nLeft, nBottom, nRight
+   LOCAL nRowPos := Row(), nColPos := Col()
+   LOCAL aMessage, aOptions, aPos
+   LOCAL nColorHigh
+   LOCAL nLenOptions, nLenMessage
+   LOCAL nWidth := 0
+   LOCAL nLenght := 0
+   LOCAL nPos
+   LOCAL i
    LOCAL nMaxRow := 0, nMaxCol := 0
+   LOCAL nRow, nCol
    LOCAL nKey, nKeyStd
+   LOCAL nTop, nLeft, nBottom, nRight
    LOCAL nChoice := 1
 
-   nRowPos := Row()
-   nColPos := Col()
+   // LOCAL nMRow, nMCol
 
-   IF ValType( aOptions ) != "A"
+   DO CASE
+   CASE ValType( cTitle ) == "U"
+      cTitle := "OK"
+   ENDCASE
+
+   DO CASE
+   CASE ValType( xMessage ) == "U"
+      aMessage := { "" }
+   CASE ValType( xMessage ) == "C"
+      aMessage := hb_ATokens( xMessage, ";" )
+   CASE ValType( xMessage ) == "A"
+      aMessage := xMessage
+   CASE ValType( xMessage ) == "N"
+      aMessage := hb_ATokens( hb_CStr( xMessage ) )
+
+   ENDCASE
+
+   DO CASE
+   CASE ValType( xOptions ) == "U"
       aOptions := { "OK" }
-   ENDIF
+   CASE ValType( xOptions ) == "C"
+      aOptions := hb_ATokens( xOptions, ";" )
+   CASE ValType( xOptions ) == "A"
+      aOptions := xOptions
+   ENDCASE
 
-   aMessage := hb_ATokens( cMessage, ";" )
+   DO CASE
+   CASE ValType( nColorNorm ) == "U"
+      nColorNorm := 0x4f
+      nColorHigh := 0x1f
+   CASE ValType( nColorNorm ) == "N"
+      nColorNorm := hb_bitAnd( nColorNorm, 0xff )
+      nColorHigh := hb_bitAnd( hb_bitOr( hb_bitShift( nColorNorm, - 4 ), hb_bitShift( nColorNorm, 4 ) ), 0x77 )
 
-   nWidth1 := 2
-   nWidth2 := 0
+   ENDCASE
 
    nLenOptions := Len( aOptions )
    FOR i := 1 TO nLenOptions
-      nWidth1 += Len( aOptions[ i ] ) + 4
-      nWidth2 += Len( aOptions[ i ] ) + 2
+      nWidth += Len( aOptions[ i ] ) + 2
+      nLenght += Len( aOptions[ i ] ) + 2
    NEXT
 
+   /* w pętli przechodzę przez nWidth, wybieram co jest większe */
    nLenMessage := Len( aMessage )
    FOR i := 1 TO nLenMessage
-      nWidth1 := Max( nWidth1, Len( aMessage[ i ] ) + 2 )
+      nWidth := Max( nWidth, Len( aMessage[ i ] ) )
    NEXT
 
    DO WHILE .T.
 
       DispBegin()
-      nRow := Int( ( MaxRow() - nLenMessage ) / 3 )
-      nCol := Int( ( MaxCol() - nWidth1 ) / 2 )
 
-      /* Zachowuje wycinek ekranu do późniejszego użycia */
-      nTop    := nRow
-      nLeft   := nCol
-      nBottom := nRow + 3 + nLenMessage
-      nRight  := nCol + nWidth1 + 1
+      /* zachowanie drugiego ustawienia ! */
+      IF nMaxRow != MaxRow( .T. ) .OR. nMaxCol != iif( nArg == NIL, MaxCol( .T. ), iif( nArg == 0x0, Int( MaxCol( .T. ) / 2 ), MaxCol( .T. ) + Int( MaxCol( .T. ) / 2 ) ) )
 
-      IF nMaxRow != MaxRow() .OR. nMaxCol != MaxCol()
+         WSelect( 0 )
 
-         cScreen := SaveScreen( nTop, nLeft, nBottom + 1, nRight + 2 )
-         hb_DispBox( nTop, nLeft, nBottom, nRight, HB_B_SINGLE_UNI + " ", 0x70 )
-         hb_Shadow( nTop, nLeft, nBottom, nRight )
+         nMaxRow := MaxRow( .T. )
+         /* ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo */
+         nMaxCol := iif( nArg == NIL, MaxCol( .T. ), iif( nArg == 0x0, Int( MaxCol( .T. ) / 2 ), MaxCol( .T. ) + Int( MaxCol( .T. ) / 2 ) ) )
 
-         FOR nPos := 1 TO nLenMessage
-            hb_DispOutAt( nRow + nPos, nCol + 1, PadC( aMessage[ nPos ], nWidth1 ), 0x70 )
+         nTop    := Int( nMaxRow / 3 ) - 3
+         nLeft   := Int( ( nMaxCol - nWidth ) / 2 ) - 2
+         nBottom := nTop + 4 + nLenMessage
+         nRight  := Int( ( nMaxCol + nWidth ) / 2 ) - 1 + 2
+
+         WClose( 1 )
+         WSetShadow( 0x8 )
+         WOpen( nTop, nLeft, nBottom, nRight, .T. )
+
+         hb_DispBox( 0, 0, nMaxRow, nMaxCol, hb_UTF8ToStrBox( " █       " ), nColorNorm )
+         hb_DispOutAt( 0, 0, Center( cTitle ), hb_bitShift( nColorNorm, 4 ) )
+
+         FOR nPos := 1 TO Len( aMessage )
+            hb_DispOutAt( 1 + nPos, 0, Center( aMessage[ nPos ] ), nColorNorm )
          NEXT
-
-         nMaxRow := MaxRow()
-         nMaxCol := MaxCol()
 
       ENDIF
 
-      nRow += nPos + 1
-      nCurrent := Int( ( nWidth1 - nWidth2 ) / ( nLenOptions  + 1 ) )
-
-      nCol += nCurrent + 1
+      /* zapisuje współrzędne przycisków aOptions */
+      aPos := {}
+      nRow := nPos + 2
+      nCol := Int( ( MaxCol() + 1 - nLenght - nLenOptions + 1 ) / 2 )
 
       FOR i := 1 TO nLenOptions
-         hb_DispOutAt( nRow, nCol, " " + aOptions[ i ] + " ", iif( i == nChoice, 0x7, 0x70 ) )
-         nCol += Len( aOptions[ i ] ) + nCurrent + 2
+         AAdd( aPos, nCol )
+         hb_DispOutAt( nRow, nCol, " " + aOptions[ i ] + " ", iif( i == nChoice, nColorHigh, nColorNorm ) )
+         nCol += Len( aOptions[ i ] ) + 3
       NEXT
+
       DispEnd()
 
       nKey := Inkey( 0 )
@@ -1386,6 +1720,27 @@ FUNCTION HC_Alert( cMessage, aOptions )
 
       CASE nKeyStd == K_ENTER .OR. nKeyStd == K_SPACE
          EXIT
+
+      CASE nKeyStd == K_MOUSEMOVE
+
+         FOR i := 1 TO nLenOptions
+            IF MRow() == nPos + 2 .AND. MCol() >= aPos[ i ] .AND. MCol() <= aPos[ i ] + Len( aOptions[ i ] ) + 1
+               nChoice := i
+            ENDIF
+         NEXT
+
+      CASE nKeyStd == K_LBUTTONDOWN
+
+         FOR i := 1 TO nLenOptions
+            IF MRow() == nPos + 2 .AND. MCol() >= aPos[ i ] .AND. MCol() <= aPos[ i ] + Len( aOptions[ i ] ) + 1
+               nChoice := i
+               EXIT
+            ENDIF
+         NEXT
+
+         IF nChoice == i
+            EXIT
+         ENDIF
 
       CASE ( nKeyStd == K_LEFT .OR. nKeyStd == K_SH_TAB ) .AND. nLenOptions > 1
 
@@ -1401,14 +1756,26 @@ FUNCTION HC_Alert( cMessage, aOptions )
             nChoice := 1
          ENDIF
 
-      CASE HB_K_RESIZE
+      CASE nKeyStd == K_CTRL_UP
+         WMove( WRow() - 1, WCol() )
 
-         hb_Scroll()
+      CASE nKeyStd == K_CTRL_DOWN
+         WMove( WRow() + 1, WCol() )
+
+      CASE nKeyStd == K_CTRL_LEFT
+         WMove( WRow(), WCol() - 1 )
+
+      CASE nKeyStd == K_CTRL_RIGHT
+         WMove( WRow(), WCol() + 1 )
+
+      CASE nKeyStd == HB_K_RESIZE
+
+         WClose( 1 )
+
          AutoSize()
 
          PanelDisplay( aPanelLeft )
          PanelDisplay( aPanelRight )
-
          ComdLineDisplay( aPanelSelect )
 
          BottomBar()
@@ -1417,7 +1784,7 @@ FUNCTION HC_Alert( cMessage, aOptions )
 
    ENDDO
 
-   RestScreen( nTop, nLeft, nBottom + 1, nRight + 2, cScreen )
+   WClose( 1 )
    SetCursor( nOldCursor )
    SetPos( nRowPos, nColPos )
 
@@ -1473,26 +1840,7 @@ STATIC PROCEDURE HCEdit( cFileName, lArg )
             PadR( " Row(" + hb_ntos( nRow + nRowNo ) + ") Col(" + hb_ntos( nCol + 1 ) + ") Size(" + hb_ntos( hb_vfSize( cFileName ) ) + ") Date(" + hb_TToC( tsDateTime ) + ")", nMaxCol + 1 ), 0x30 )
          DispEnd()
 
-         nKey := Inkey( 0.1, INKEY_ALL + HB_INKEY_GTEVENT )
-
-         DO CASE
-         CASE hb_gtInfo( HB_GTI_KBDSHIFTS ) == hb_bitOr( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_ALT )
-            HC_Alert( "ALT" )
-         CASE hb_gtInfo( HB_GTI_KBDSHIFTS ) == hb_bitOr( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_CTRL )
-            HC_Alert( "CTRL" )
-         CASE hb_gtInfo( HB_GTI_KBDSHIFTS ) == hb_bitOr( hb_gtInfo( HB_GTI_KBDSHIFTS ), HB_GTI_KBD_SHIFT )
-            // /
-            OutStd( aString[ nRow ] )
-
-         OTHERWISE
-
-         ENDCASE
-
-         IF nKey == 0
-            LOOP
-         ENDIF
-         OutStd( nKey  )
-         OutStd( nKeyStd  )
+         nKey := Inkey( 0 )
          nKeyStd := hb_keyStd( nKey )
 
          SWITCH nKeyStd
@@ -1503,9 +1851,9 @@ STATIC PROCEDURE HCEdit( cFileName, lArg )
 
          CASE K_LBUTTONDOWN
 
-            IF MRow() > 0 .AND. MRow() < MaxRow() .AND. MCol() > 0 .AND. MCol() < MaxCol() .AND. MRow() < Len( aString ) + 1
+            IF MRow() > 0 .AND. MCol() > 0 .AND. MRow() < Len( aString ) + 1 .AND. MCol() < nMaxCol
                nRow := MRow()
-               nCol := MCol()
+               nCol := Len( aString[ nRowNo + nRow ] )
             ENDIF
 
             EXIT
@@ -1580,7 +1928,7 @@ STATIC PROCEDURE HCEdit( cFileName, lArg )
 
          CASE K_RIGHT
 
-            IF nCol < Len( aString[ nRowNo + nRow ]  )
+            IF nCol < Len( aString[ nRowNo + nRow ] )
                nCol++
             ENDIF
 
@@ -1594,7 +1942,7 @@ STATIC PROCEDURE HCEdit( cFileName, lArg )
 
          CASE K_END
 
-            nCol := Len( aString[ nRowNo + nRow ]  )
+            nCol := Len( aString[ nRowNo + nRow ] )
 
             EXIT
 
@@ -1787,7 +2135,7 @@ STATIC PROCEDURE HCEditDisplay( aString, nRow, nCol, nRowNo )
       IF nLine <= Len( aString )
          hb_DispOutAt( i, 0, ;
             PadR( aString[ nLine ], nMaxCol + 1 ), ;
-            iif( i == nRow, 0x70, 0x7 ) )
+            iif( i == nRow, 0x8f, 0x7 ) )
       ELSE
          hb_Scroll( i, 0, nMaxRow, nMaxCol + 1 )
          hb_DispOutAt( i, 1, ">> EOF <<", 0x01 )
@@ -1808,6 +2156,53 @@ STATIC PROCEDURE SaveFile( aString, cFileName )
    hb_MemoWrit( cFileName, cString )
 
    RETURN
+
+STATIC FUNCTION FileError()
+   RETURN { ;
+      {   0, "The operation completed successfully." }, ;
+      {   2, "The system cannot find the file specified." }, ;
+      {   3, "The system cannot find the path specified." }, ;
+      {   4, "The system cannot open the file." }, ;
+      {   5, "Access is denied." }, ;
+      {   6, "The handle is invalid." }, ;
+      {   8, "Not enough storage is available to process this command." }, ;
+      {  15, "The system cannot find the drive specified." }, ;
+      {  16, "The directory cannot be removed." }, ;
+      {  17, "The system cannot move the file to a different disk drive." }, ;
+      {  18, "There are no more files." }, ;
+      {  19, "Attempted to write to a write-protected disk." }, ;
+      {  21, "The device is not ready." }, ;
+      {  23, "Data error (cyclic redundancy check)." }, ;
+      {  29, "The system cannot write to the specified device." }, ;
+      {  30, "The system cannot read from the specified device." }, ;
+      {  32, "The process cannot access the file because ; it is being used by another process." }, ;
+      {  33, "The process cannot access the file because ; another process has locked a portion of the file." }, ;
+      {  36, "Too many files opened for sharing." }, ;
+      {  38, "Reached the end of the file." }, ;
+      {  62, "Space to store the file waiting to be printed ; is not available on the server." }, ;
+      {  63, "Your file waiting to be printed was deleted." }, ;
+      {  80, "The file exists." }, ;
+      {  82, "The directory or file cannot be created." }, ;
+      { 110, "The system cannot open the device or file specified." }, ;
+      { 111, "The file name is too long" }, ;
+      { 113, "No more internal file identifiers available." }, ;
+      { 114, "The target internal file identifier is incorrect." }, ;
+      { 123, "The filename, directory name, ; or volume label syntax is incorrect." }, ;
+      { 130, "Attempt to use a file handle to an open disk ; partition for an operation other than raw disk I/O." }, ;
+      { 131, "An attempt was made to move the file pointer ; before the beginning of the file." }, ;
+      { 132, "The file pointer cannot be set on the specified ; device or file." }, ;
+      { 138, "The system tried to join a drive ; to a directory on a joined drive." }, ;
+      { 139, "The system tried to substitute a drive ; to a directory on a substituted drive." }, ;
+      { 140, "The system tried to join a drive ; to a directory on a substituted drive." }, ;
+      { 141, "The system tried to SUBST a drive ; to a directory on a joined drive." }, ;
+      { 143, "The system cannot join or substitute a drive ; to or for a directory on the same drive." }, ;
+      { 144, "The directory is not a subdirectory of the root directory." }, ;
+      { 145, "The directory is not empty." }, ;
+      { 150, "System trace information was not specified ; in your CONFIG.SYS file, or tracing is disallowed." }, ;
+      { 154, "The volume label you entered exceeds ; the label character limit of the target file system." }, ;
+      { 167, "Unable to lock a region of a file." }, ;
+      { 174, "The file system does not support ; atomic changes to the lock type." }, ;
+      }
 
 // ====================================
 FUNCTION Q( xPar )
