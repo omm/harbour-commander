@@ -26,10 +26,10 @@ Windows (MinGW-w64 - for 32 and 64 bit)
 ![Windows](http://harbour.pl/img/hc_windows.png "Windows 10 desktop")
 
 ## Linux
-![GNU/Linux](docs/img/hc_linux.png "With family Linux Ubuntu desktop, based on GNOME")
+![GNU/Linux](http://harbour.pl/img/hc_linux.png "With family Linux Ubuntu desktop, based on GNOME")
 
 ## Unix
-![Solaris](docs/img/hc_solaris.png "Solaris desktop GNOME")
+![Solaris](http://harbour.pl/img/hc_solaris.png "Solaris desktop GNOME")
 
 ## License
 Licensed under the [MIT](LICENSE) License.
