@@ -1615,8 +1615,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
    LOCAL nKey, nKeyStd
    LOCAL nTop, nLeft, nBottom, nRight
    LOCAL nChoice := 1
-
-   // LOCAL nMRow, nMCol
+   LOCAL nMRow, nMCol
 
    DO CASE
    CASE ValType( cTitle ) == "U"
@@ -1731,6 +1730,17 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
       CASE nKeyStd == K_LBUTTONDOWN
 
+         nMCol := MCol()
+         nMRow := MRow()
+
+         IF MRow() == 0 .AND. MCol() >= 0 .AND. MCol() <= MaxCol()
+
+            DO WHILE MLeftDown()
+               WMove( WRow() + MRow() - nMRow, WCol() + MCol() - nMCol )
+            ENDDO
+
+         ENDIF
+        
          FOR i := 1 TO nLenOptions
             IF MRow() == nPos + 2 .AND. MCol() >= aPos[ i ] .AND. MCol() <= aPos[ i ] + Len( aOptions[ i ] ) + 1
                nChoice := i
