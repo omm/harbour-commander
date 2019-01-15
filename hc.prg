@@ -114,7 +114,7 @@ STATIC PROCEDURE PanelFetchList( aPanel, cDir )
    NEXT
 
    hb_ADel( aPanel[ _aDirectory ], AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == "." } ), .T. )
-   ASort( aPanel[ _aDirectory ],,, {| x, y | DIR_PREFIX( x ) + OSUPPER( x[ F_NAME ] ) < DIR_PREFIX( y ) + OSUPPER( y[ F_NAME ] ) } )
+   ASort( aPanel[ _aDirectory ], 2,, {| x, y | DIR_PREFIX( x ) + OSUPPER( x[ F_NAME ] ) < DIR_PREFIX( y ) + OSUPPER( y[ F_NAME ] ) } )
 
    RETURN
 
@@ -1160,7 +1160,7 @@ STATIC FUNCTION HC_CopyDirectory( cSourceFile, cTargetFile )
    FOR i := 1 TO nRows
       IF aCatalog[ i ][ F_NAME ] == "." .OR. aCatalog[ i ][ F_NAME ] == ".."
 
-      ELSEIF aCatalog[ i ][ F_ATTR ] == "D"
+      ELSEIF "D" $ aCatalog[ i ][ F_ATTR ]
          IF HC_CopyDirectory( cSourceFile + hb_ps() + aCatalog[ i ][ F_NAME ], cTargetFile + cSubCat + hb_ps() ) == -1
             RETURN FError()
          ENDIF
