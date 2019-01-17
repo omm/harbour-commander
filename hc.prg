@@ -103,7 +103,7 @@ STATIC FUNCTION PanelInit()
 
 STATIC PROCEDURE PanelFetchList( aPanel, cDir )
 
-   LOCAL i
+   LOCAL i, nPos
 
    aPanel[ _cCurrentDir ] := hb_defaultValue( cDir, hb_cwd() )
    aPanel[ _aDirectory ] := hb_vfDirectory( aPanel[ _cCurrentDir ], "HSD" )
@@ -112,8 +112,9 @@ STATIC PROCEDURE PanelFetchList( aPanel, cDir )
    FOR i := 1 TO Len( aPanel[ _aDirectory ] )  // ? na AEval()
       AAdd( aPanel[ _aDirectory ][ i ], .T. )
    NEXT
-
-   hb_ADel( aPanel[ _aDirectory ], AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == "." } ), .T. )
+   if ( nPos := AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == "." } ) ) > 0
+      hb_ADel( aPanel[ _aDirectory ], nPos, .T. )
+   endif
    ASort( aPanel[ _aDirectory ], 2,, {| x, y | DIR_PREFIX( x ) + OSUPPER( x[ F_NAME ] ) < DIR_PREFIX( y ) + OSUPPER( y[ F_NAME ] ) } )
 
    RETURN
