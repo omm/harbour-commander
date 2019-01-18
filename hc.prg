@@ -1266,6 +1266,8 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
    NEXT
 
+   PanelTitleDisplay( aPanel )
+
    DispEnd()
 
    RETURN
@@ -1283,6 +1285,24 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
 
    DispEnd()
 
+   RETURN
+
+STATIC PROCEDURE PanelTitleDisplay( aPanel )
+
+   LOCAL cPanelTitle
+   LOCAL nWidthPanel
+
+   nWidthPanel := aPanel[ _nRight ] - aPanel[ _nLeft ]
+   cPanelTitle := PadR( aPanel[ _cCurrentDir ], Min( Len( aPanel[ _cCurrentDir ] ), nWidthPanel ), Space( 0 ) )
+   IF Len( cPanelTitle ) >= nWidthPanel - 2
+      cPanelTitle := SubStr( cPanelTitle, 1, nWidthPanel - 2 ) + ">"
+   ENDIF
+
+   DispBegin()
+
+   hb_DispOutAt( aPanel[ _nTop ], aPanel[ _nLeft ] + 1, cPanelTitle, 0x1f )
+
+   DispEnd()
    RETURN
 
 STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr )
