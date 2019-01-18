@@ -1235,11 +1235,15 @@ STATIC PROCEDURE PanelDisplay( aPanel )
       nLengthSize := Max( nLengthSize, Len( Str( x[ 2 ] ) ) ) } )
 
    DispBegin()
+   
    IF aPanelSelect == aPanel
       hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ], HB_B_DOUBLE_UNI + " ", 0x1f )
    ELSE
       hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ], HB_B_SINGLE_UNI + " ", 0x1f )
    ENDIF
+
+   hb_DispOutAt( aPanel[ _nTop ], aPanel[ _nLeft ]+1, PadR( hb_StrShrink( aPanel[ _cCurrentDir ], 1 ), ;
+                 Min( aPanel[ _nRight ]-aPanel[ _nLeft ]-1, Len( aPanel[ _cCurrentDir ] ) ) ), "GR+/W"  )
 
    nPos += aPanel[ _nRowNo ]
    FOR nRow := aPanel[ _nTop ] + 1 TO aPanel[ _nBottom ] - 1
