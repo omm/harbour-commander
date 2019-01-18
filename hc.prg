@@ -103,7 +103,7 @@ STATIC FUNCTION PanelInit()
 
 STATIC PROCEDURE PanelFetchList( aPanel, cDir )
 
-   LOCAL i, nPos
+   LOCAL i, nPos, a2Dot, aDots := { ".", ".." }, iDot
 
    aPanel[ _cCurrentDir ] := hb_defaultValue( cDir, hb_cwd() )
    aPanel[ _aDirectory ] := hb_vfDirectory( aPanel[ _cCurrentDir ], "HSD" )
@@ -112,10 +112,19 @@ STATIC PROCEDURE PanelFetchList( aPanel, cDir )
    FOR i := 1 TO Len( aPanel[ _aDirectory ] )  // ? na AEval()
       AAdd( aPanel[ _aDirectory ][ i ], .T. )
    NEXT
-   if ( nPos := AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == "." } ) ) > 0
-      hb_ADel( aPanel[ _aDirectory ], nPos, .T. )
-   endif
-   ASort( aPanel[ _aDirectory ], 2,, {| x, y | DIR_PREFIX( x ) + OSUPPER( x[ F_NAME ] ) < DIR_PREFIX( y ) + OSUPPER( y[ F_NAME ] ) } )
+   
+   FOR each iDot in aDots
+      if ( nPos := AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == iDot } ) ) > 0
+         if iDot:__enumIndex == 2
+            a2Dot := aPanel[ _aDirectory ][ nPos ]
+         endif
+         hb_ADel( aPanel[ _aDirectory ], nPos, .T. )
+      endif
+   NEXT
+   ASort( aPanel[ _aDirectory ],,, {| x, y | DIR_PREFIX( x ) + OSUPPER( x[ F_NAME ] ) < DIR_PREFIX( y ) + OSUPPER( y[ F_NAME ] ) } )
+   IF hb_IsArray( a2Dot )
+      hb_AIns( aPanel[ _aDirectory ], 1 , a2Dot, .T. )
+   ENDIF
 
    RETURN
 
@@ -1203,7 +1212,8 @@ STATIC FUNCTION HC_DeleteFile( aPanel )  // ?
 STATIC PROCEDURE PanelDisplay( aPanel )
 
    LOCAL nRow, nPos := 1
-   LOCAL nLengthName := 0, nLengthSize := 0
+   LOCAL nLengthName := 4 /* 4 is len of top element ".." plus brackets "[" and "]" */
+   LOCAL nLengthSize := 0
 
    AScan( aPanel[ _aDirectory ], {| x | ;
       nLengthName := Max( nLengthName, Len( x[ 1 ] ) ), ;
