@@ -189,7 +189,14 @@ STATIC PROCEDURE Prompt()
       SWITCH nKeyStd
 
       CASE K_ESC
-         lContinue := .F.
+
+         IF ! Empty( aPanelSelect[ _cComdLine ] )
+            aPanelSelect[ _cComdLine ] := ""
+            ComdLineDisplay( aPanelSelect )
+            aPanelSelect[ _nComdCol ] := 0            
+         ELSE
+            lContinue := .F.
+         ENDIF
          EXIT
 
       CASE K_ENTER
@@ -222,8 +229,16 @@ STATIC PROCEDURE Prompt()
 
          IF aPanelSelect == aPanelLeft
             aPanelSelect := aPanelRight
+            aPanelSelect[ _cComdLine ] := aPanelLeft[ _cComdLine ]
+            aPanelSelect[ _nComdCol ] := aPanelLeft[ _nComdCol ]
+            aPanelLeft[ _cComdLine ] := ""
+            aPanelLeft[ _nComdCol ] := 0
          ELSE
             aPanelSelect := aPanelLeft
+            aPanelSelect[ _cComdLine ] := aPanelRight[ _cComdLine ]
+            aPanelSelect[ _nComdCol ] := aPanelRight[ _nComdCol ]
+            aPanelRight[ _cComdLine ] := ""
+            aPanelRight[ _nComdCol ] := 0
          ENDIF
 
          PanelDisplay( aPanelLeft )
