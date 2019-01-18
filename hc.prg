@@ -192,8 +192,8 @@ STATIC PROCEDURE Prompt()
 
          IF ! Empty( aPanelSelect[ _cComdLine ] )
             aPanelSelect[ _cComdLine ] := ""
+            aPanelSelect[ _nComdCol ] := 0
             ComdLineDisplay( aPanelSelect )
-            aPanelSelect[ _nComdCol ] := 0            
          ELSE
             lContinue := .F.
          ENDIF
