@@ -171,7 +171,6 @@ STATIC PROCEDURE Prompt()
          PanelDisplay( aPanelRight )
 
          ComdLineDisplay( aPanelSelect )
-//         PanelTitleDisplay( aPanelSelect )
 
          BottomBar()
 
@@ -183,7 +182,6 @@ STATIC PROCEDURE Prompt()
 
       ComdLineDisplay( aPanelSelect )
       PanelDisplay( aPanelSelect )
-//      PanelTitleDisplay( aPanelSelect )
 
       nKey := Inkey( 0 )
       nKeyStd := hb_keyStd( nKey )
