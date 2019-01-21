@@ -44,6 +44,7 @@ STATIC aPanelRight
 STATIC aPanelSelect
 
 PROCEDURE Main()
+   LOCAL hc_conf
 
    Set( _SET_DATEFORMAT, "yyyy-mm-dd" )
    Set( _SET_SCOREBOARD, .F. )
@@ -67,8 +68,10 @@ PROCEDURE Main()
    aPanelRight := PanelInit()
 
    /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk i końcowy separator ścieżki */
-   PanelFetchList( aPanelLeft, hb_cwd() )
-   PanelFetchList( aPanelRight, hb_cwd() )
+   /* restore configuration*/
+   hc_conf := hb_deserialize( hb_memoread( "hc.cfg" ) )
+   PanelFetchList( aPanelLeft, hc_conf["aPanelLeft"]["_cCurrentDir"] )
+   PanelFetchList( aPanelRight, hc_conf["aPanelRight"]["_cCurrentDir"] )
 
    AutoSize()
 
@@ -157,6 +160,7 @@ STATIC PROCEDURE Prompt()
    LOCAL cSpaces
    LOCAL nErrorCode
    LOCAL cNewDrive
+   LOCAL hc_conf
 
    DO WHILE lContinue
 
@@ -196,6 +200,10 @@ STATIC PROCEDURE Prompt()
             ComdLineDisplay( aPanelSelect )
          ELSE
             lContinue := .F.
+            /* save configuration on exit*/
+            hc_conf := { "aPanelLeft" => { "_cCurrentDir" => aPanelLeft[ _cCurrentDir ] },;
+                "aPanelRight" => { "_cCurrentDir" => aPanelRight[ _cCurrentDir ] } }
+            hb_MemoWrit( "hc.cfg", hb_Serialize( hc_conf ) )
          ENDIF
          EXIT
 
