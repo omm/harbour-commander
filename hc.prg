@@ -1311,13 +1311,14 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
 
 STATIC PROCEDURE PanelTitleDisplay( aPanel )
 
-   LOCAL cPanelTitle
+   LOCAL cPanelTitle := aPanel[ _cCurrentDir ]
    LOCAL nWidthPanel
 
-   nWidthPanel := aPanel[ _nRight ] - aPanel[ _nLeft ]
-   cPanelTitle := PadR( aPanel[ _cCurrentDir ], Min( Len( aPanel[ _cCurrentDir ] ), nWidthPanel ), Space( 0 ) )
-   IF Len( cPanelTitle ) >= nWidthPanel - 2
-      cPanelTitle := SubStr( cPanelTitle, 1, nWidthPanel - 2 ) + ">"
+   nWidthPanel := aPanel[ _nRight ] - aPanel[ _nLeft ] - 2
+   IF Len( cPanelTitle ) < nWidthPanel
+      cPanelTitle := PadR( aPanel[ _cCurrentDir ], Min( Len( aPanel[ _cCurrentDir ] ), nWidthPanel ), Space( 0 ) )
+   ELSE
+      cPanelTitle := SubStr( cPanelTitle, 1, 3 ) + "..." + Right( cPanelTitle, nWidthPanel - 5 )
    ENDIF
 
    DispBegin()
