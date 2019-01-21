@@ -1288,7 +1288,7 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
    NEXT
 
-   // PanelTitleDisplay( aPanel )
+   PanelTitleDisplay( aPanel )
 
    DispEnd()
 
@@ -1308,7 +1308,7 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
    DispEnd()
 
    RETURN
-/* The item will be displayed from the menu selection
+
 STATIC PROCEDURE PanelTitleDisplay( aPanel )
 
    LOCAL cPanelTitle
@@ -1327,7 +1327,7 @@ STATIC PROCEDURE PanelTitleDisplay( aPanel )
    DispEnd()
 
    RETURN
-*/
+
 STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr )
 
    LOCAL cFileName, cFileSize, dFileDate, cFileAttr
