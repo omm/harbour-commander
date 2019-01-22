@@ -204,7 +204,7 @@ STATIC PROCEDURE Prompt()
             hc_conf := {;
                "aPanelLeft" => { "_cCurrentDir" => aPanelLeft[ _cCurrentDir ] },;
                "aPanelRight" => { "_cCurrentDir" => aPanelRight[ _cCurrentDir ] } }
-            ?hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( hc_conf ) )
+            hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( hc_conf ) )
          ENDIF
          EXIT
 
@@ -2480,6 +2480,9 @@ FUNCTION Q( xPar )
 // ====================================
 
 FUNCTION StartUpPath()
-local cDir := ""
-hb_FNameSplit( hb_argv( 0 ), @cDir )
-RETURN cDir
+
+   LOCAL cDir := ""
+   
+   hb_FNameSplit( hb_argv( 0 ), @cDir )
+
+   RETURN cDir
