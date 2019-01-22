@@ -70,8 +70,8 @@ PROCEDURE Main()
    /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk i końcowy separator ścieżki */
    /* restore configuration*/
    hc_conf := hb_deserialize( hb_memoread( "hc.cfg" ) )
-   PanelFetchList( aPanelLeft, hc_conf["aPanelLeft"]["_cCurrentDir"] )
-   PanelFetchList( aPanelRight, hc_conf["aPanelRight"]["_cCurrentDir"] )
+   PanelFetchList( aPanelLeft, iif( HB_ISNIL( hc_conf ), hb_cwd(), hc_conf["aPanelLeft"]["_cCurrentDir"] ) )
+   PanelFetchList( aPanelRight, iif( HB_ISNIL( hc_conf ), hb_cwd(), hc_conf["aPanelRight"]["_cCurrentDir"] ) )
 
    AutoSize()
 
@@ -201,9 +201,10 @@ STATIC PROCEDURE Prompt()
          ELSE
             lContinue := .F.
             /* save configuration on exit*/
-            hc_conf := { "aPanelLeft" => { "_cCurrentDir" => aPanelLeft[ _cCurrentDir ] },;
-                "aPanelRight" => { "_cCurrentDir" => aPanelRight[ _cCurrentDir ] } }
-            hb_MemoWrit( "hc.cfg", hb_Serialize( hc_conf ) )
+            hc_conf := {;
+               "aPanelLeft" => { "_cCurrentDir" => aPanelLeft[ _cCurrentDir ] },;
+               "aPanelRight" => { "_cCurrentDir" => aPanelRight[ _cCurrentDir ] } }
+            ?hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( hc_conf ) )
          ENDIF
          EXIT
 
@@ -1896,7 +1897,7 @@ STATIC FUNCTION HC_MenuF2()
    LOCAL nRowPos := 1, nColPos := 2
    LOCAL nMRow, nMCol
 
-   IF ! hb_vfExists( "hc.menu" )
+   IF ! hb_vfExists( StartUpPath() + "hc.menu" )
 
       /* Przykład budowy menu, zapisuje ciąg znaków do zbioru dyskowego, edycja z pliku hc.menu */
       cCopyExample += "F1:Compilation of my project in Harbour" + hb_eol()
@@ -1907,7 +1908,7 @@ STATIC FUNCTION HC_MenuF2()
       cCopyExample += "uname -a"
 
       /* Jeśli nie jest określona ścieżka, hb_MemoWrit() zapisuje cCopyExample w aktualnym katalogu */
-      hb_MemoWrit( "hc.menu", cCopyExample )
+      hb_MemoWrit( StartUpPath() + "hc.menu", cCopyExample )
 
    ENDIF
 
@@ -2477,3 +2478,8 @@ STATIC FUNCTION FileError()
 FUNCTION Q( xPar )
    RETURN Alert( hb_ValToExp( xPar ) )
 // ====================================
+
+FUNCTION StartUpPath()
+local cDir := ""
+hb_FNameSplit( hb_argv( 0 ), @cDir )
+RETURN cDir
