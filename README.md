@@ -18,9 +18,11 @@ You can get subsequent updates using this command:
 
 ### Harbour Commander unstable binaries (updated after each commit)
 
-Windows (MinGW-w64 - for 32 and 64 bit)
+Windows
 - [ Download HC ](https://github.com/rjopek/harbour-commander/releases/download/demo/hc.zip)
 
+Linux
+- [ Download HC ](https://github.com/rjopek/harbour-commander/releases/download/demo/hc.tar.gz)
 
 ## Windows 10
 ![Windows](http://harbour.pl/img/hc_windows.png "Windows 10 desktop")
@@ -32,7 +34,7 @@ Windows (MinGW-w64 - for 32 and 64 bit)
 ![Solaris](http://harbour.pl/img/hc_solaris.png "Solaris desktop GNOME")
 
 ## License
-Licensed under the [MIT](LICENSE) License.
+Licensed under the [MIT](.github/LICENSE) License.
 
 ## Contributor Covenant Code of Conduct
 [Contributor Covenant Code of Conduct](.github/CODE_OF_CONDUCT.md)
