@@ -1877,7 +1877,7 @@ STATIC FUNCTION HC_MenuF2()
    LOCAL nOldCursor := SetCursor( SC_NONE )
    LOCAL cFile := "hc.menu"
    LOCAL cCopyExample := ""
-   LOCAL aMenu, cLine
+   LOCAL i, aLine, aMenu := {}, cLine
    LOCAL nMaxRow := 0, nMaxCol := 0
    LOCAL nRow := 1
    LOCAL nKey, nKeyStd
@@ -1891,18 +1891,24 @@ STATIC FUNCTION HC_MenuF2()
 
       /* Przykład budowy menu, zapisuje ciąg znaków do zbioru dyskowego, edycja z pliku hc.menu */
       cCopyExample += "F1:Compilation of my project in Harbour" + hb_eol()
-      cCopyExample += "hbmk2 hc.prg" + hb_eol()
+      cCopyExample += Space( 8 ) + "hbmk2 hc.prg" + hb_eol()
       cCopyExample += "F2:Checking version of GCC compiler" + hb_eol()
-      cCopyExample += "gcc --version" + hb_eol()
+      cCopyExample += Space( 8 ) + "gcc --version" + hb_eol()
       cCopyExample += "F3:What is my OS version" + hb_eol()
-      cCopyExample += "uname -a"
+      cCopyExample += Space( 8 ) + "uname -a"
 
       /* Jeśli nie jest określona ścieżka, hb_MemoWrit() zapisuje cCopyExample w aktualnym katalogu */
       hb_MemoWrit( "hc.menu", cCopyExample )
 
    ENDIF
 
-   aMenu := hb_ATokens( hb_MemoRead( cFile ), .T. )
+   aLine := hb_ATokens( hb_MemoRead( cFile ), .T. )
+   
+   FOR i := 1 TO Len( aLine )
+      IF SubStr( aLine[ i ], 1, 1 ) == "F"
+         AAdd( aMenu, aLine[ i ] )
+      ENDIF
+   NEXT
 
    AScan( aMenu, {| str | nColLength := Max( nColLength, Len( str ) ) } )
 
@@ -1919,7 +1925,7 @@ STATIC FUNCTION HC_MenuF2()
 
          nTop    := Int( nMaxRow / 3 ) - 3
          nLeft   := Int( ( nMaxCol - nColLength ) / 2 ) - 2
-         nBottom := nTop + 4 + Len( aMenu )
+         nBottom := nTop + 2 + Len( aMenu )
          nRight  := Int( ( nMaxCol + nColLength ) / 2 ) - 1 + 2
 
          WClose( 1 )
