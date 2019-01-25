@@ -163,6 +163,8 @@ STATIC PROCEDURE Prompt()
 #else
    < < <
    LOCAL result := ""
+   LOCAL ctuxCmd := "xdg-open "
+   LOCAL cTerminal := ""
 #endif
 
    DO WHILE lContinue
