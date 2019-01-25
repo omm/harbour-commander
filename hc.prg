@@ -157,6 +157,13 @@ STATIC PROCEDURE Prompt()
    LOCAL cSpaces
    LOCAL nErrorCode
    LOCAL cNewDrive
+#if defined( __PLATFORM__WINDOWS )
+
+   // optimized, PLATFORM_LINUX ?
+#else
+   < < <
+   LOCAL result := ""
+#endif
 
    DO WHILE lContinue
 
@@ -205,7 +212,28 @@ STATIC PROCEDURE Prompt()
          IF Empty( aPanelSelect[ _cComdLine ] )
             /* jeżeli stoimy na pliku */
             IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
-               hb_run( aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] )
+#if defined( __PLATFORM__WINDOWS )
+               hb_run( Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+#else
+               IF hb_vfExists( "/usr/bin/nautilus" )
+                  cTerminal = "gnome-terminal"
+               ELSEIF hb_vfExists( "/usr/bin/thunar" )
+                  cTerminal = "xfce4-terminal"
+               ELSEIF hb_vfExists( "/usr/bin/pcmanfm" )
+                  cTerminal = "lxterminal"
+               ELSEIF hb_vfExists( "/usr/bin/caja" )
+                  cTerminal = "mate-terminal"
+               ELSEIF hb_vfExists( "/usr/bin/dolphin" )
+                  cTerminal = "konsole"
+               ENDIF
+               hb_processRun( "sh -c 'file " + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + "'" + Chr( 34 ),, @result )
+               IF At( "ELF", result ) > 0
+                  ctuxCmd = ""
+               ELSEIF At( "script", result ) > 0
+                  ctuxCmd = cterminal + " -x "
+               ENDIF
+               hb_run( ctuxCmd + Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+#endif
             ELSE
                ChangeDir( aPanelSelect )
             ENDIF
@@ -280,7 +308,28 @@ STATIC PROCEDURE Prompt()
          nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
          /* jeżeli stoimy na pliku */
          IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
-            hb_run( aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] )
+#if defined( __PLATFORM__WINDOWS )
+            hb_run( Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+#else
+            IF hb_vfExists( "/usr/bin/nautilus" )
+               cTerminal = "gnome-terminal"
+            ELSEIF hb_vfExists( "/usr/bin/thunar" )
+               cTerminal = "xfce4-terminal"
+            ELSEIF hb_vfExists( "/usr/bin/pcmanfm" )
+               cTerminal = "lxterminal"
+            ELSEIF hb_vfExists( "/usr/bin/caja" )
+               cTerminal = "mate-terminal"
+            ELSEIF hb_vfExists( "/usr/bin/dolphin" )
+               cTerminal = "konsole"
+            ENDIF
+            hb_processRun( "sh -c 'file " + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + "'" + Chr( 34 ),, @result )
+            IF At( "ELF", result ) > 0
+               ctuxCmd = ""
+            ELSEIF At( "script", result ) > 0
+               ctuxCmd = cterminal + " -x "
+            ENDIF
+            hb_run( ctuxCmd + Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+#endif
          ELSE
             ChangeDir( aPanelSelect )
          ENDIF
@@ -697,7 +746,11 @@ STATIC PROCEDURE FunctionKey_F1()
          "request.;", ;
          { "Click New issue." } ) == 1
 
+#if defined( __PLATFORM__WINDOWS )
       hb_run( "start " + "https://github.com/rjopek/harbour-commander/issues/new" )
+#else
+      hb_run( "xdg-open " + "https://github.com/rjopek/harbour-commander/issues/new" )
+#endif
 
    ENDIF
 
@@ -1903,7 +1956,7 @@ STATIC FUNCTION HC_MenuF2()
    ENDIF
 
    aLine := hb_ATokens( hb_MemoRead( cFile ), .T. )
-   
+
    FOR i := 1 TO Len( aLine )
       IF SubStr( aLine[ i ], 1, 1 ) == "F"
          AAdd( aMenu, aLine[ i ] )
