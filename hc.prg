@@ -634,21 +634,26 @@ STATIC PROCEDURE Prompt()
          lContinue := .F.
          EXIT
 
-      CASE K_ALT_F1
-         /* ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
+#if defined( __PLATFORM__WINDOWS )
+
+      CASE K_SH_F1
+
+         /* zmień katalog na punkt montowania lewego panelu,
+         ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
          AllDrives() zwraca tablicę */
          IF ( cNewDrive := HC_Alert( "Drive letter", "Choose left drive:", AllDrives(), 0x8a, 0x0 ) ) != 0
 
-            hb_CurDrive( AllDrives()[ cNewDrive ] )
-            PanelFetchList( aPanelLeft, hb_cwd() )
-            PanelDisplay( aPanelLeft )
+               hb_CurDrive( AllDrives()[ cNewDrive ] )
+               PanelFetchList( aPanelLeft, hb_cwd() )
+               PanelDisplay( aPanelLeft )
 
          ENDIF
 
          EXIT
 
-      CASE K_ALT_F2
-         /* ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
+      CASE K_SH_F2
+         /* zmień katalog na punkt montowania prawego panelu,
+         ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
          AllDrives() zwraca tablicę */
          IF ( cNewDrive := HC_Alert( "Drive letter", "Choose right drive:", AllDrives(), 0x8a, 0x1 ) ) != 0
 
@@ -659,6 +664,7 @@ STATIC PROCEDURE Prompt()
          ENDIF
 
          EXIT
+#endif
 
       CASE K_SH_F4
 
