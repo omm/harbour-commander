@@ -157,11 +157,12 @@ STATIC PROCEDURE Prompt()
    LOCAL cSpaces
    LOCAL nErrorCode
    LOCAL cNewDrive
+   LOCAL i
+
 #if defined( __PLATFORM__WINDOWS )
 
    // optimized, PLATFORM_LINUX ?
 #else
-   < < <
    LOCAL result := ""
    LOCAL ctuxCmd := "xdg-open "
    LOCAL cTerminal := ""
@@ -715,6 +716,22 @@ STATIC PROCEDURE Prompt()
 
          ENDIF
 
+         EXIT
+
+      CASE 43 /* select a group of files. */
+         FOR i := 1 TO Len( aPanelSelect[ _aDirectory ] )
+            IF aPanelSelect[ _aDirectory ][ i ][ F_NAME ] != ".."
+               aPanelSelect[ _aDirectory ][ i ][ F_STATUS ] := .F.
+            ENDIF
+         NEXT
+         EXIT
+
+      CASE 95 /* Unselect a group of files. */
+         FOR i := 1 TO Len( aPanelSelect[ _aDirectory ] )
+            IF aPanelSelect[ _aDirectory ][ i ][ F_NAME ] != ".."
+               aPanelSelect[ _aDirectory ][ i ][ F_STATUS ] := .T.
+            ENDIF
+         NEXT
          EXIT
 
       OTHERWISE
