@@ -44,6 +44,7 @@ STATIC aPanelRight
 STATIC aPanelSelect
 
 PROCEDURE Main()
+   LOCAL hc_conf
 
    Set( _SET_DATEFORMAT, "yyyy-mm-dd" )
    Set( _SET_SCOREBOARD, .F. )
@@ -67,8 +68,10 @@ PROCEDURE Main()
    aPanelRight := PanelInit()
 
    /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk i końcowy separator ścieżki */
-   PanelFetchList( aPanelLeft, hb_cwd() )
-   PanelFetchList( aPanelRight, hb_cwd() )
+   /* restore configuration*/
+   hc_conf := hb_deserialize( hb_memoread( "hc.cfg" ) )
+   PanelFetchList( aPanelLeft, iif( HB_ISNIL( hc_conf ), hb_cwd(), hc_conf["aPanelLeft"]["_cCurrentDir"] ) )
+   PanelFetchList( aPanelRight, iif( HB_ISNIL( hc_conf ), hb_cwd(), hc_conf["aPanelRight"]["_cCurrentDir"] ) )
 
    AutoSize()
 
@@ -157,6 +160,7 @@ STATIC PROCEDURE Prompt()
    LOCAL cSpaces
    LOCAL nErrorCode
    LOCAL cNewDrive
+   LOCAL hc_conf
    LOCAL i
 
 #if defined( __PLATFORM__WINDOWS )
@@ -206,6 +210,11 @@ STATIC PROCEDURE Prompt()
             ComdLineDisplay( aPanelSelect )
          ELSE
             lContinue := .F.
+            /* save configuration on exit*/
+            hc_conf := {;
+               "aPanelLeft" => { "_cCurrentDir" => aPanelLeft[ _cCurrentDir ] },;
+               "aPanelRight" => { "_cCurrentDir" => aPanelRight[ _cCurrentDir ] } }
+            hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( hc_conf ) )
          ENDIF
          EXIT
 
@@ -1360,7 +1369,7 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
    NEXT
 
-   // PanelTitleDisplay( aPanel )
+   PanelTitleDisplay( aPanel )
 
    DispEnd()
 
@@ -1380,16 +1389,17 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
    DispEnd()
 
    RETURN
-/* The item will be displayed from the menu selection
+
 STATIC PROCEDURE PanelTitleDisplay( aPanel )
 
-   LOCAL cPanelTitle
+   LOCAL cPanelTitle := aPanel[ _cCurrentDir ]
    LOCAL nWidthPanel
 
-   nWidthPanel := aPanel[ _nRight ] - aPanel[ _nLeft ]
-   cPanelTitle := PadR( aPanel[ _cCurrentDir ], Min( Len( aPanel[ _cCurrentDir ] ), nWidthPanel ), Space( 0 ) )
-   IF Len( cPanelTitle ) >= nWidthPanel - 2
-      cPanelTitle := SubStr( cPanelTitle, 1, nWidthPanel - 2 ) + ">"
+   nWidthPanel := aPanel[ _nRight ] - aPanel[ _nLeft ] - 2
+   IF Len( cPanelTitle ) < nWidthPanel
+      cPanelTitle := PadR( aPanel[ _cCurrentDir ], Min( Len( aPanel[ _cCurrentDir ] ), nWidthPanel ), Space( 0 ) )
+   ELSE
+      cPanelTitle := SubStr( cPanelTitle, 1, 3 ) + "..." + Right( cPanelTitle, nWidthPanel - 5 )
    ENDIF
 
    DispBegin()
@@ -1399,7 +1409,7 @@ STATIC PROCEDURE PanelTitleDisplay( aPanel )
    DispEnd()
 
    RETURN
-*/
+
 STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr )
 
    LOCAL cFileName, cFileSize, dFileDate, cFileAttr
@@ -1959,7 +1969,7 @@ STATIC FUNCTION HC_MenuF2()
    LOCAL nRowPos := 1, nColPos := 2
    LOCAL nMRow, nMCol
 
-   IF ! hb_vfExists( "hc.menu" )
+   IF ! hb_vfExists( StartUpPath() + "hc.menu" )
 
       /* Przykład budowy menu, zapisuje ciąg znaków do zbioru dyskowego, edycja z pliku hc.menu */
       cCopyExample += "F1:Compilation of my project in Harbour" + hb_eol()
@@ -1970,7 +1980,7 @@ STATIC FUNCTION HC_MenuF2()
       cCopyExample += Space( 8 ) + "uname -a"
 
       /* Jeśli nie jest określona ścieżka, hb_MemoWrit() zapisuje cCopyExample w aktualnym katalogu */
-      hb_MemoWrit( "hc.menu", cCopyExample )
+      hb_MemoWrit( StartUpPath() + "hc.menu", cCopyExample )
 
    ENDIF
 
@@ -2546,3 +2556,11 @@ STATIC FUNCTION FileError()
 FUNCTION Q( xPar )
    RETURN Alert( hb_ValToExp( xPar ) )
 // ====================================
+
+FUNCTION StartUpPath()
+
+   LOCAL cDir := ""
+   
+   hb_FNameSplit( hb_argv( 0 ), @cDir )
+
+   RETURN cDir
