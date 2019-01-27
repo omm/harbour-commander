@@ -32,6 +32,11 @@
 
 #define _nElements    11
 
+#define _cCurrentDirLeft  1
+#define _cCurrentDirRight 2
+
+#define _nElementConfig 2
+
 /* FError() */
 #define MEANING       2
 
@@ -44,7 +49,7 @@ STATIC aPanelRight
 STATIC aPanelSelect
 
 PROCEDURE Main()
-   LOCAL hc_conf
+   LOCAL aConfig
 
    Set( _SET_DATEFORMAT, "yyyy-mm-dd" )
    Set( _SET_SCOREBOARD, .F. )
@@ -69,9 +74,9 @@ PROCEDURE Main()
 
    /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk i końcowy separator ścieżki */
    /* restore configuration*/
-   hc_conf := hb_deserialize( hb_memoread( "hc.cfg" ) )
-   PanelFetchList( aPanelLeft, iif( HB_ISNIL( hc_conf ), hb_cwd(), hc_conf["aPanelLeft"]["_cCurrentDir"] ) )
-   PanelFetchList( aPanelRight, iif( HB_ISNIL( hc_conf ), hb_cwd(), hc_conf["aPanelRight"]["_cCurrentDir"] ) )
+   aConfig := hb_deserialize( hb_memoread( "hc.cfg" ) )
+   PanelFetchList( aPanelLeft, iif( aConfig == NIL, hb_cwd(), aConfig[ _cCurrentDirLeft ] ) )
+   PanelFetchList( aPanelRight, iif( aConfig == NIL, hb_cwd(), aConfig[ _cCurrentDirRight ] ) )
 
    AutoSize()
 
@@ -160,7 +165,7 @@ STATIC PROCEDURE Prompt()
    LOCAL cSpaces
    LOCAL nErrorCode
    LOCAL cNewDrive
-   LOCAL hc_conf
+   LOCAL aConfig := Array( _nElementConfig )
    LOCAL i
 
 #if defined( __PLATFORM__WINDOWS )
@@ -211,10 +216,9 @@ STATIC PROCEDURE Prompt()
          ELSE
             lContinue := .F.
             /* save configuration on exit*/
-            hc_conf := {;
-               "aPanelLeft" => { "_cCurrentDir" => aPanelLeft[ _cCurrentDir ] },;
-               "aPanelRight" => { "_cCurrentDir" => aPanelRight[ _cCurrentDir ] } }
-            hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( hc_conf ) )
+            aConfig[ _cCurrentDirLeft  ] := aPanelLeft[ _cCurrentDir ]
+            aConfig[ _cCurrentDirRight ] := aPanelRight[ _cCurrentDir ]
+            hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( aConfig ) )
          ENDIF
          EXIT
 
@@ -1375,7 +1379,7 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
    NEXT
 
-   PanelTitleDisplay( aPanel )
+/*   PanelTitleDisplay( aPanel ) */
 
    DispEnd()
 
@@ -1396,6 +1400,7 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
 
    RETURN
 
+/*
 STATIC PROCEDURE PanelTitleDisplay( aPanel )
 
    LOCAL cPanelTitle := aPanel[ _cCurrentDir ]
@@ -1415,6 +1420,7 @@ STATIC PROCEDURE PanelTitleDisplay( aPanel )
    DispEnd()
 
    RETURN
+*/
 
 STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr )
 
