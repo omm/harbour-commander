@@ -1193,6 +1193,8 @@ STATIC PROCEDURE FunctionKey_F9( )
    LOCAL aF9MenuPos := { 1 }
    LOCAL aF9SubMenu := { "Option" => { "Panel settings", "Save settings" } }
    LOCAL nResult
+   LOCAL nBottomSub
+   LOCAL nLeftSub
 
    nTop := 0
    nLeft := 0
@@ -1208,7 +1210,7 @@ STATIC PROCEDURE FunctionKey_F9( )
       IF lReDraw
          DispBegin()
          FOR EACH i IN aF9Menu
-            hb_DispOutAt( nTop, aF9MenuPos[ i:__enumIndex ], i, iif( i:__enumIndex == iMenu, 0x4f, 0x20 ) )
+            hb_DispOutAt( nTop, aF9MenuPos[ i:__enumIndex ], i, iif( i:__enumIndex == iMenu, 0x8f, 0x20 ) )
          NEXT
          DispEnd()
          lReDraw := .F.
@@ -1240,12 +1242,17 @@ STATIC PROCEDURE FunctionKey_F9( )
 
       CASE K_ENTER
          IF HB_HHasKey( aF9SubMenu, aF9Menu[ iMenu ] )
-            cScreenSub := SaveScreen( nTop + 1, aF9MenuPos[ iMenu ], MaxRow() - 1, MaxCol() - 1 )
-            nResult := Achoice( nTop + 1, aF9MenuPos[ iMenu ], MaxRow() - 1, MaxCol() - 1, aF9SubMenu[ aF9Menu[ iMenu ] ] )
+            nLeftSub := 0
+            nBottomSub := Min( nTop + 1 + Len( aF9SubMenu[ aF9Menu[ iMenu ] ] ) + 1, MaxRow() )
+            aEval( aF9SubMenu[ aF9Menu[ iMenu ] ], {| x | nLeftSub := Max( Len( x ), nLeftSub ) } )
+            nLeftSub := Min( aF9MenuPos[ iMenu ] + nLeftSub + 1, MaxCol() )
+            cScreenSub := SaveScreen( nTop + 1, aF9MenuPos[ iMenu ], nBottomSub, nLeftSub )
+            hb_DispBox( nTop + 1, aF9MenuPos[ iMenu ], nBottomSub, nLeftSub, HB_B_DOUBLE_UNI + " " /*hb_UTF8ToStrBox( " _       " )*/, 0x8a )
+            nResult := Achoice( nTop + 2, aF9MenuPos[ iMenu ] + 1, nBottomSub -1, nLeftSub - 1, aF9SubMenu[ aF9Menu[ iMenu ] ] )
             if nResult > 0
                HC_ALERT( "SubMenu", "Your choice is '" + aF9SubMenu[ aF9Menu[ iMenu ] ][ nResult ] + "'" )
             endif
-            RestScreen( nTop + 1, aF9MenuPos[ iMenu ], MaxRow() - 1, MaxCol() - 1, cScreenSub )
+            RestScreen( nTop + 1, aF9MenuPos[ iMenu ], nBottomSub, nLeftSub, cScreenSub )
          ELSE
             HC_ALERT( "Warning", "Not implemented yet",, 0x8f )
          ENDIF
