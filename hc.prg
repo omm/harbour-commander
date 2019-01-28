@@ -632,6 +632,8 @@ STATIC PROCEDURE Prompt()
 
       CASE K_F9
 
+         FunctionKey_F9( )
+
          EXIT
 
       CASE K_F10
@@ -640,7 +642,7 @@ STATIC PROCEDURE Prompt()
 
 #if defined( __PLATFORM__WINDOWS )
 
-      CASE K_SH_F1
+      CASE K_ALT_F1
 
          /* zmień katalog na punkt montowania lewego panelu,
          ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
@@ -655,7 +657,7 @@ STATIC PROCEDURE Prompt()
 
          EXIT
 
-      CASE K_SH_F2
+      CASE K_ALT_F2
          /* zmień katalog na punkt montowania prawego panelu,
          ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
          AllDrives() zwraca tablicę */
@@ -1178,8 +1180,83 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
 
    RETURN
 
-// STATIC PROCEDURE FunctionKey_F9( aPanel )
-// RETURN
+STATIC PROCEDURE FunctionKey_F9( )
+
+   LOCAL nTop, nLeft, nRight
+   LOCAL cScreen, cScreenSub
+   LOCAL nKey, nKeyStd
+   LOCAL lReDraw := .T.
+   LOCAL lContinue := .T.
+   LOCAL i
+   LOCAL iMenu := 1
+   LOCAL aF9Menu := { "Left", "Option", "Right" }
+   LOCAL aF9MenuPos := { 1 }
+   LOCAL aF9SubMenu := { "Option" => { "Panel settings", "Save settings" } }
+   LOCAL nResult
+
+   nTop := 0
+   nLeft := 0
+   nRight := MaxCol()
+
+   aEval( aF9Menu, {| x, y | Aadd( aF9MenuPos, aF9MenuPos[ y ] + Len( x ) + 1 ) },, Len( aF9Menu ) - 1 )
+
+   cScreen := SaveScreen( nTop, nLeft, nTop, nRight )
+
+   hb_DispBox( nTop, nLeft, nTop, nRight, hb_UTF8ToStrBox( " █       " ), 0x22 )
+
+   DO WHILE lContinue
+      IF lReDraw
+         DispBegin()
+         FOR EACH i IN aF9Menu
+            hb_DispOutAt( nTop, aF9MenuPos[ i:__enumIndex ], i, iif( i:__enumIndex == iMenu, 0x4f, 0x20 ) )
+         NEXT
+         DispEnd()
+         lReDraw := .F.
+      ENDIF
+
+      nKey := Inkey( 0 )
+      nKeyStd := hb_keyStd( nKey )
+
+      SWITCH nKeyStd
+      CASE K_ESC
+         lContinue := .F.
+         EXIT
+
+      CASE K_LEFT
+         iMenu --
+         IF iMenu < 1
+            iMenu := Len( aF9Menu )
+         ENDIF
+         lReDraw := .T.
+         EXIT
+
+      CASE K_RIGHT
+         iMEnu ++
+         IF iMenu > Len( aF9Menu )
+            iMenu := 1
+         ENDIF
+         lReDraw := .T.
+         EXIT
+
+      CASE K_ENTER
+         IF HB_HHasKey( aF9SubMenu, aF9Menu[ iMenu ] )
+            cScreenSub := SaveScreen( nTop + 1, aF9MenuPos[ iMenu ], MaxRow() - 1, MaxCol() - 1 )
+            nResult := Achoice( nTop + 1, aF9MenuPos[ iMenu ], MaxRow() - 1, MaxCol() - 1, aF9SubMenu[ aF9Menu[ iMenu ] ] )
+            if nResult > 0
+               HC_ALERT( "SubMenu", "Your choice is '" + aF9SubMenu[ aF9Menu[ iMenu ] ][ nResult ] + "'" )
+            endif
+            RestScreen( nTop + 1, aF9MenuPos[ iMenu ], MaxRow() - 1, MaxCol() - 1, cScreenSub )
+         ELSE
+            HC_ALERT( "Warning", "Not implemented yet",, 0x8f )
+         ENDIF
+         EXIT
+      ENDSWITCH
+
+   ENDDO
+
+   RestScreen( nTop, nLeft, nTop, nRight, cScreen )
+
+   RETURN
 
 // STATIC PROCEDURE FunctionKey_F10( aPanel )
 // RETURN
