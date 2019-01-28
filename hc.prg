@@ -1463,7 +1463,7 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
    NEXT
 
-/*   PanelTitleDisplay( aPanel ) */
+   PanelTitleDisplay( aPanel )
 
    DispEnd()
 
@@ -1484,7 +1484,7 @@ STATIC PROCEDURE ComdLineDisplay( aPanel )
 
    RETURN
 
-/*
+
 STATIC PROCEDURE PanelTitleDisplay( aPanel )
 
    LOCAL cPanelTitle := aPanel[ _cCurrentDir ]
@@ -1504,7 +1504,6 @@ STATIC PROCEDURE PanelTitleDisplay( aPanel )
    DispEnd()
 
    RETURN
-*/
 
 STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr )
 
