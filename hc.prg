@@ -47,9 +47,9 @@
 STATIC aPanelLeft
 STATIC aPanelRight
 STATIC aPanelSelect
+STATIC aConfig
 
 PROCEDURE Main()
-   LOCAL aConfig
 
    Set( _SET_DATEFORMAT, "yyyy-mm-dd" )
    Set( _SET_SCOREBOARD, .F. )
@@ -75,8 +75,11 @@ PROCEDURE Main()
    /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk i końcowy separator ścieżki */
    /* restore configuration*/
    aConfig := hb_deserialize( hb_memoread( "hc.cfg" ) )
-   PanelFetchList( aPanelLeft, iif( aConfig == NIL, hb_cwd(), aConfig[ _cCurrentDirLeft ] ) )
-   PanelFetchList( aPanelRight, iif( aConfig == NIL, hb_cwd(), aConfig[ _cCurrentDirRight ] ) )
+   if ! HB_ISARRAY( aConfig )
+      ConfigInit()
+   ENDIF
+   PanelFetchList( aPanelLeft, aConfig[ _cCurrentDirLeft ] )
+   PanelFetchList( aPanelRight, aConfig[ _cCurrentDirRight ] )
 
    AutoSize()
 
@@ -86,6 +89,15 @@ PROCEDURE Main()
 
    hb_Scroll()
    SetPos( 0, 0 )
+
+   RETURN
+
+STATIC PROCEDURE ConfigInit()
+
+   aConfig := Array( _nElementConfig )
+
+   aConfig[ _cCurrentDirLeft  ] := hb_cwd()
+   aConfig[ _cCurrentDirRight ] := hb_cwd()
 
    RETURN
 
@@ -113,7 +125,9 @@ STATIC PROCEDURE PanelFetchList( aPanel, cDir )
 
    LOCAL i, nPos, a2Dot, aDots := { ".", ".." }, iDot
 
-   aPanel[ _cCurrentDir ] := hb_defaultValue( cDir, hb_cwd() )
+   CheckDirExists( @cDir )
+
+   aPanel[ _cCurrentDir ] := cDir
    aPanel[ _aDirectory ] := hb_vfDirectory( aPanel[ _cCurrentDir ], "HSD" )
 
    /* dodaję do każdego elementu tablicy wartość .T. */
@@ -135,6 +149,19 @@ STATIC PROCEDURE PanelFetchList( aPanel, cDir )
    ENDIF
 
    RETURN
+
+STATIC PROCEDURE CheckDirExists( cDir )
+
+   LOCAL nPs
+
+   WHILE ! hb_DirExists( cDir )
+      nPs := hb_Rat( hb_ps(), cDir,, iif( Right( cDir, 1 ) == hb_ps(), Len( cDir ) - 1, NIL ) )
+      cDir := SubStr( cDir, 1, nPs )
+      CheckDirExists( @cDir )
+   END
+
+   RETURN
+
 
 STATIC PROCEDURE AutoSize()
 
@@ -165,7 +192,6 @@ STATIC PROCEDURE Prompt()
    LOCAL cSpaces
    LOCAL nErrorCode
    LOCAL cNewDrive
-   LOCAL aConfig := Array( _nElementConfig )
    LOCAL i
 
 #if defined( __PLATFORM__WINDOWS )
@@ -1433,15 +1459,9 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
    DispBegin()
 
-   IF aPanelSelect == aPanel
-      hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ], HB_B_DOUBLE_UNI + " ", 0x1f )
-   ELSE
-      hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ], HB_B_SINGLE_UNI + " ", 0x1f )
-   ENDIF
-/* The item will be displayed from the menu selection
-   hb_DispOutAt( aPanel[ _nTop ], aPanel[ _nLeft ] + 1, PadR( hb_StrShrink( aPanel[ _cCurrentDir ], 1 ), ;
-      Min( aPanel[ _nRight ] - aPanel[ _nLeft ] - 1, Len( aPanel[ _cCurrentDir ] ) ) ), "GR+/W"  )
-*/
+   hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ],;
+      iif( aPanelSelect == aPanel, HB_B_DOUBLE_UNI, HB_B_SINGLE_UNI ) + " ", 0x1f )
+
    nPos += aPanel[ _nRowNo ]
    FOR nRow := aPanel[ _nTop ] + 1 TO aPanel[ _nBottom ] - 1
 
@@ -1509,8 +1529,6 @@ STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr
 
    LOCAL cFileName, cFileSize, dFileDate, cFileAttr
 
-   iif( nLengthName == 2, nLengthName := 4, nLengthName )
-
    cFileName := PadR( cName + Space( nLengthName ), nLengthName ) + " "
 
    IF cName == ".."
@@ -1518,7 +1536,7 @@ STATIC FUNCTION Expression( nLengthName, nLengthSize, cName, cSize, dDate, cAttr
    ENDIF
 
    IF cAttr == "D" .OR. cAttr == "HD" .OR. cAttr == "HSD" .OR. cAttr == "HSDL" .OR. cAttr == "RHSA" .OR. cAttr == "RD" .OR. cAttr == "AD" .OR. cAttr == "RHD"
-      cFileSize := PadL( "DIR", nLengthSize + 3 ) + " "
+      cFileSize := PadL( Iif( rTrim( cFileName ) == "[..]", "UP--DIR", "DIR"), nLengthSize + 3 ) + " "
    ELSE
       cFileSize := PadL( Transform( cSize, "9 999 999 999" ), nLengthSize + 3 ) + " "
    ENDIF
