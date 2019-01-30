@@ -748,7 +748,7 @@ STATIC PROCEDURE Prompt()
                      ENDIF
                   ENDIF
 
-                  PanelRefresh( aPanelSelect )
+                  PanelRefresh( aPanelSelect, cFileName )
 
                ELSE
 
@@ -1114,9 +1114,10 @@ STATIC PROCEDURE FunctionKey_F7( aPanel )
    LOCAL nErrorCode
 
    IF HB_ISSTRING( cNewDir := MsgBox( "Create the directory.", NIL, { "Yes", "No!" } ) )
+
       IF hb_vfDirMake( aPanel[ _cCurrentDir ] + cNewDir ) == 0
 
-         PanelRefresh( aPanel )
+         PanelRefresh( aPanel, cNewDir )
 
       ELSE
          IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -1562,12 +1563,20 @@ STATIC FUNCTION ColoringSyntax( cAttr, lStatus )
 
    RETURN nColor
 
-STATIC PROCEDURE PanelRefresh( aPanel )
+STATIC PROCEDURE PanelRefresh( aPanel, nRowBar2cDir )
+
+   LOCAL _nRowBarNew
 
    IF aPanelLeft[ _cCurrentDir ] == aPanelRight[ _cCurrentDir ]
 
       PanelFetchList( aPanelLeft, aPanelLeft[ _cCurrentDir ] )
       PanelFetchList( aPanelRight, aPanelRight[ _cCurrentDir ] )
+
+      IF HB_ISSTRING( nRowBar2cDir )
+         _nRowBarNew := GetRowBarPos( aPanelLeft, nRowBar2cDir )
+         aPanelLeft[ _nRowBar ] := _nRowBarNew
+         aPanelRight[ _nRowBar ] := _nRowBarNew
+      ENDIF
 
       PanelDisplay( aPanelLeft )
       PanelDisplay( aPanelRight )
@@ -1575,11 +1584,25 @@ STATIC PROCEDURE PanelRefresh( aPanel )
    ELSE
 
       PanelFetchList( aPanel, aPanel[ _cCurrentDir ] )
+
+      IF HB_ISSTRING( nRowBar2cDir )
+         _nRowBarNew := GetRowBarPos( aPanel, nRowBar2cDir )
+         aPanel[ _nRowBar ] := _nRowBarNew
+      ENDIF
+
       PanelDisplay( aPanel )
 
    ENDIF
 
    RETURN
+
+STATIC FUNCTION GetRowBarPos( aPanel, nRowBar2cDir )
+
+   LOCAL nPos
+
+   nPos := Ascan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == nRowBar2cDir } )
+
+   RETURN iif( nPos == 0, 1, nPos )
 
 STATIC PROCEDURE ChangeDir( aPanel )
 
