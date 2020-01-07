@@ -19,10 +19,10 @@ You can get subsequent updates using this command:
 ### Harbour Commander unstable binaries (updated after each commit)
 
 Windows
-- [ Download HC ](https://github.com/rjopek/harbour-commander/releases/download/demo/hc.zip)
+- Not ready yet
 
 Linux
-- [ Download HC ](https://github.com/rjopek/harbour-commander/releases/download/demo/hc.tar.gz)
+- Not ready yet
 
 ## Windows 10
 ![Windows](http://harbour.pl/img/hc_windows.png "Windows 10 desktop")
