@@ -40,7 +40,7 @@
 /* FError() */
 #define MEANING       2
 
-#define F_STATUS      6  /* zaznacz plik, katalog */
+#define F_STATUS      6  /* select file, directory */
 
 #define FXO_SHARELOCK  0x4000  /* emulate DOS SH_DENY* mode in POSIX OS */
 
