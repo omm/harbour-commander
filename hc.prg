@@ -72,7 +72,7 @@ PROCEDURE Main()
    aPanelLeft := PanelInit()
    aPanelRight := PanelInit()
 
-   /* hb_cwd() zwraca pełny bieżący katalog roboczy zawierający dysk i końcowy separator ścieżki */
+   /* hb_cwd () returns the full current working directory containing the disk and final path separator */
    /* restore configuration*/
    aConfig := hb_deserialize( hb_memoread( "hc.cfg" ) )
    if ! HB_ISARRAY( aConfig )
@@ -130,7 +130,7 @@ STATIC PROCEDURE PanelFetchList( aPanel, cDir )
    aPanel[ _cCurrentDir ] := cDir
    aPanel[ _aDirectory ] := hb_vfDirectory( aPanel[ _cCurrentDir ], "HSD" )
 
-   /* dodaję do każdego elementu tablicy wartość .T. */
+   /* Add .T. to each element of the array. */
    FOR i := 1 TO Len( aPanel[ _aDirectory ] )  // ? na AEval()
       AAdd( aPanel[ _aDirectory ][ i ], .T. )
    NEXT
@@ -252,7 +252,7 @@ STATIC PROCEDURE Prompt()
 
          nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
          IF Empty( aPanelSelect[ _cComdLine ] )
-            /* jeżeli stoimy na pliku */
+            /* if we stand on a file */
             IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 #if defined( __PLATFORM__WINDOWS )
                hb_run( Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
@@ -348,7 +348,7 @@ STATIC PROCEDURE Prompt()
       CASE K_LDBLCLK
 
          nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
-         /* jeżeli stoimy na pliku */
+         /* if we stand on a file */
          IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 #if defined( __PLATFORM__WINDOWS )
             hb_run( Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
@@ -400,11 +400,11 @@ STATIC PROCEDURE Prompt()
          nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
          IF aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
 
-            /* oznaczam stan usunięcia aktualnego elementu w tablicy */
+            /* Marking the deletion status of the current item in the table */
             IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
                aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
             ELSE
-               /* zwracam stan usunięcia aktualnego elementu w tablicy */
+               /* return the delete status of the current item in the array */
                aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
             ENDIF
 
@@ -571,11 +571,11 @@ STATIC PROCEDURE Prompt()
          nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
          IF aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
 
-            /* oznaczam stan usunięcia aktualnego elementu w tablicy */
+            /* Marking the deletion status of the current item in the table */
             IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
                aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
             ELSE
-               /* zwracam stan usunięcia aktualnego elementu w tablicy */
+               /* return the delete status of the current item in the array */
                aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
             ENDIF
 
@@ -670,9 +670,9 @@ STATIC PROCEDURE Prompt()
 
       CASE K_ALT_F1
 
-         /* zmień katalog na punkt montowania lewego panelu,
-         ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
-         AllDrives() zwraca tablicę */
+         /* change directory to the left panel mount point,
+            the last parameter sets the dialog: NIL center, 0x0 to the left and 0x1 to the right
+            AllDrives () returns an array */
          IF ( cNewDrive := HC_Alert( "Drive letter", "Choose left drive:", AllDrives(), 0x8a, 0x0 ) ) != 0
 
                hb_CurDrive( AllDrives()[ cNewDrive ] )
@@ -684,9 +684,9 @@ STATIC PROCEDURE Prompt()
          EXIT
 
       CASE K_ALT_F2
-         /* zmień katalog na punkt montowania prawego panelu,
-         ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo
-         AllDrives() zwraca tablicę */
+         /* change directory to the right panel mount point,
+            the last parameter sets the dialog: NIL center, 0x0 to the left and 0x1 to the right
+            AllDrives () returns an array */
          IF ( cNewDrive := HC_Alert( "Drive letter", "Choose right drive:", AllDrives(), 0x8a, 0x1 ) ) != 0
 
             hb_CurDrive( AllDrives()[ cNewDrive ] )
@@ -701,7 +701,7 @@ STATIC PROCEDURE Prompt()
       CASE K_SH_F4
 
          nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
-         /* jeżeli stoimy na pliku */
+         /* if we stand on a file */
          IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 
             IF HB_ISSTRING( cFileName := MsgBox( "Create file.", aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
@@ -736,7 +736,7 @@ STATIC PROCEDURE Prompt()
             ENDIF
 
          ELSE
-            /* jeżeli stoimy na katalogu */
+            /* if we stand on the catalog */
             IF HB_ISSTRING( cFileName := MsgBox( "Create file.", NIL, { "Yes", "No!" } ) )
                IF ( pHandle := hb_vfOpen( aPanelSelect[ _cCurrentDir ] + cFileName, FO_CREAT + FO_TRUNC + FO_WRITE ) ) != NIL
 
@@ -835,7 +835,7 @@ STATIC PROCEDURE FunctionKey_F3( aPanel )
    LOCAL nLengthName := 0
 
    nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
-   /* jeżeli stoimy na pliku */
+   /* if we stand on a file */
    IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 
       HCEdit( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ], .F. )
@@ -852,7 +852,7 @@ STATIC PROCEDURE FunctionKey_F3( aPanel )
             aItem[ F_ATTR ] )
       NEXT
 
-      SaveFile( aTarget, "DirScan.txt" ) // gdzie zapisywać ?
+      SaveFile( aTarget, "DirScan.txt" ) // where to save ?
 
       HCEdit( "DirScan.txt", .F. )
    ENDIF
@@ -864,7 +864,7 @@ STATIC PROCEDURE FunctionKey_F4( aPanel )
    LOCAL nPos
 
    nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
-   /* jeżeli stoimy na pliku przejdź do edycji */
+   /* if we stand on a file go to editing */
    IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
       HCEdit( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ], .T. )
    ELSE
@@ -884,7 +884,7 @@ STATIC PROCEDURE FunctionKey_F5( aPanel )
    ELSE
 
       IF aPanel == aPanelLeft
-         /* jeżeli stoimy na pliku */
+         /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
             IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
                   aPanelRight[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
@@ -924,7 +924,7 @@ STATIC PROCEDURE FunctionKey_F5( aPanel )
             ENDIF
          ENDIF
       ELSE
-         /* jeżeli stoimy na pliku */
+         /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
             IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
                   aPanelLeft[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
@@ -976,7 +976,7 @@ STATIC PROCEDURE FunctionKey_F6( aPanel )
    ELSE
 
       IF aPanel == aPanelLeft
-         /* jeżeli stoimy na pliku */
+         /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
             IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
                   aPanelRight[ _cCurrentDir ], { "Yes", "No!" } ) )
@@ -1038,7 +1038,7 @@ STATIC PROCEDURE FunctionKey_F6( aPanel )
             ENDIF
          ENDIF
       ELSE
-         /* jeżeli stoimy na pliku */
+         /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
             IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
                   aPanelLeft[ _cCurrentDir ], { "Yes", "No!" } ) )
@@ -1101,7 +1101,7 @@ STATIC PROCEDURE FunctionKey_F6( aPanel )
       ENDIF
    ENDIF
 
-   /* jeżeli usuniemy będąc wskaźnikiem RowBar na ostatniej pozycji to - 1 */
+   /* if we remove being the RowBar indicator in the last position then - 1 */
 // IF Len( aPanel[ _aDirectory ] ) < aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
 // aPanel[ _nRowBar ] -= 1
 // ENDIF
@@ -1141,10 +1141,10 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
       HC_Alert( "Up Directory", "The item to be deleted has not been selected." )
    ELSE
       nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
-      /* jeżeli stoimy na pliku */
+      /* if we stand on a file */
       IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 
-         /* oznaczam stan usunięcia aktualnego elementu w tablicy */
+         /* Marking the deletion status of the current item in the table */
          IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
             aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
          ENDIF
@@ -1166,12 +1166,12 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
                ENDIF
             ENDIF
          ELSE
-            /* zwracam stan usunięcia aktualnego elementu w tablicy */
+            /* return the delete status of the current item in the array */
             aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
          ENDIF
 
       ELSE
-         /* jeżeli stoimy na katalogu */
+         /* if we stand on the catalog */
          IF HC_Alert( "Down Directory", "Do you really want to delete the selected directory:;" + '"' + aPanel[ _aDirectory ][ nPos ][ F_NAME ] + '"', { "Yes", "No!" }, 0x9f ) == 1
             IF hb_vfDirRemove( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
 
@@ -1200,7 +1200,7 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
    ENDIF
 
 
-   /* jeżeli usuniemy będąc wskaźnikiem RowBar + RowNo na ostatniej pozycji to - 1 */
+   /* if we remove being the RowBar + RowNo indicator in the last position then - 1 */
 // IF Len( aPanel[ _aDirectory ] ) < aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
 // aPanel[ _nRowBar ] -= 1
 // ENDIF
@@ -1375,7 +1375,7 @@ STATIC FUNCTION HC_CopyFile( cSourceFile, cTargetFile )
          hb_vfClose( pTarget )
          hb_vfClose( pSource )
 
-         /* pobierz datę czas pliku, ustaw datę czas pliku */
+         /* get date file time, set date file time */
          hb_vfTimeGet( cSourceFile, @tsDateTime )
          hb_vfTimeSet( cTargetFile, tsDateTime )
 
@@ -1437,8 +1437,8 @@ STATIC FUNCTION HC_DeleteFile( aPanel )  // ?
             RETURN FError()
          ENDDO
 
-         /* jeżeli usuniemy będąc wskaźnikiem RowBar lub RowBar + RowNo na ostatniej pozycji to - 1 */
-         // IF Len( aPanel[ _aDirectory ] ) < aPanel[ _nRowBar ] + aPanel[ _nRowNo ]       // jak usunąć nRowNo nRowBar ?
+         /* if we remove being the RowBar or RowBar + RowNo indicator in the last position then - 1 */
+         // IF Len( aPanel[ _aDirectory ] ) < aPanel[ _nRowBar ] + aPanel[ _nRowNo ]       // how to remove nRowNo nRowBar?
          aPanel[ _nRowBar ] -= 1
          // ENDIF
 
@@ -1709,7 +1709,7 @@ STATIC FUNCTION MsgBox( cMessage, aMessage, aOptions )
       aOptionsOK := { "Ok" }
    ENDIF
 
-   /* aMessage obecnie nie jest tablicą */
+   /* aMessage is not currently an array */
    IF Empty( aMessage )
       cString := ""
    ELSE
@@ -1949,7 +1949,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
       nLenght += Len( aOptions[ i ] ) + 2
    NEXT
 
-   /* w pętli przechodzę przez nWidth, wybieram co jest większe */
+   /* in the loop I go through nWidth, I choose what is bigger */
    nLenMessage := Len( aMessage )
    FOR i := 1 TO nLenMessage
       nWidth := Max( nWidth, Len( aMessage[ i ] ) )
@@ -1959,13 +1959,13 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
       DispBegin()
 
-      /* zachowanie drugiego ustawienia ! */
+      /* save the second setting! */
       IF nMaxRow != MaxRow( .T. ) .OR. nMaxCol != iif( nArg == NIL, MaxCol( .T. ), iif( nArg == 0x0, Int( MaxCol( .T. ) / 2 ), MaxCol( .T. ) + Int( MaxCol( .T. ) / 2 ) ) )
 
          WSelect( 0 )
 
          nMaxRow := MaxRow( .T. )
-         /* ostatni parametr ustawia okienko dialogowe: NIL środek, 0x0 po lewo i 0x1 po prawo */
+         /* the last parameter sets the dialog box: NIL middle, 0x0 to the left and 0x1 to the right */
          nMaxCol := iif( nArg == NIL, MaxCol( .T. ), iif( nArg == 0x0, Int( MaxCol( .T. ) / 2 ), MaxCol( .T. ) + Int( MaxCol( .T. ) / 2 ) ) )
 
          nTop    := Int( nMaxRow / 3 ) - 3
@@ -1986,7 +1986,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
       ENDIF
 
-      /* zapisuje współrzędne przycisków aOptions */
+      /* saves the coordinates of the aOptions buttons */
       aPos := {}
       nRow := nPos + 2
       nCol := Int( ( MaxCol() + 1 - nLenght - nLenOptions + 1 ) / 2 )
@@ -2107,7 +2107,7 @@ STATIC FUNCTION HC_MenuF2()
 
    IF ! hb_vfExists( StartUpPath() + "hc.menu" )
 
-      /* Przykład budowy menu, zapisuje ciąg znaków do zbioru dyskowego, edycja z pliku hc.menu */
+      /* Example of menu structure, saves string to disk file, editing from file hc.menu */
       cCopyExample += "F1:Compilation of my project in Harbour" + hb_eol()
       cCopyExample += Space( 8 ) + "hbmk2 hc.prg" + hb_eol()
       cCopyExample += "F2:Checking version of GCC compiler" + hb_eol()
@@ -2115,7 +2115,7 @@ STATIC FUNCTION HC_MenuF2()
       cCopyExample += "F3:What is my OS version" + hb_eol()
       cCopyExample += Space( 8 ) + "uname -a"
 
-      /* Jeśli nie jest określona ścieżka, hb_MemoWrit() zapisuje cCopyExample w aktualnym katalogu */
+      /* If no path is specified, hb_MemoWrit () saves cCopyExample in the current directory */
       hb_MemoWrit( StartUpPath() + "hc.menu", cCopyExample )
 
    ENDIF
