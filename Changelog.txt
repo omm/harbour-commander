@@ -7,17 +7,17 @@
    Entries may not always be in chronological/commit order.
    See license at the end of file. */
 
-2020-01-10 11:32 UTC+0200 Alexey Myronenko (m.oleksa/at/ukr.net)
+2020-01-10 11:32 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * hb.prg
     * Translated comments from polish to english 
 
-2020-01-08 01:04 UTC+0200 Alexey Myronenko (m.oleksa/at/ukr.net)
+2020-01-08 01:04 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * README.md
     * deleted links to download file
    
-2020-01-08 00:24 UTC+0200 Alexey Myronenko (m.oleksa/at/ukr.net)
+2020-01-08 00:24 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * hb.prg
     * Translated one comment from polish to english 
 
-2020-01-07 13:50 UTC+0200 Alexey Myronenko (m.oleksa/at/ukr.net)
+2020-01-07 13:50 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   + Changelog.txt added
