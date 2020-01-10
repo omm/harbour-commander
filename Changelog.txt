@@ -9,6 +9,10 @@
 
 2020-01-10 11:32 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * hb.prg
+    + save, restore active panel on startup
+
+2020-01-10 11:32 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hb.prg
     * Translated comments from polish to english 
 
 2020-01-08 01:04 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
