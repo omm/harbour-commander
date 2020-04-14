@@ -75,6 +75,7 @@ PROCEDURE Main()
 
    /* hb_cwd () returns the full current working directory containing the disk and final path separator */
    /* restore configuration*/
+
    aConfig := hb_deserialize( hb_memoread( "hc.cfg" ) )
    if ! HB_ISARRAY( aConfig )
       ConfigInit()
@@ -84,7 +85,7 @@ PROCEDURE Main()
 
    AutoSize()
 
-   aPanelSelect := aConfig[ _cCurrentPanel ]
+   aPanelSelect :=  iif( aConfig[ _cCurrentPanel ] == "Left", aPanelLeft, aPanelRight )
 
    Prompt()
 
@@ -99,7 +100,7 @@ STATIC PROCEDURE ConfigInit()
 
    aConfig[ _cCurrentDirLeft  ] := hb_cwd()
    aConfig[ _cCurrentDirRight ] := hb_cwd()
-   aConfig[ _cCurrentPanel ] := iif( aPanelSelect == NIL, aPanelLeft, aPanelSelect )
+   aConfig[ _cCurrentPanel ] := "Left"
 
    RETURN
 
@@ -246,7 +247,7 @@ STATIC PROCEDURE Prompt()
             /* save configuration on exit*/
             aConfig[ _cCurrentDirLeft  ] := aPanelLeft[ _cCurrentDir ]
             aConfig[ _cCurrentDirRight ] := aPanelRight[ _cCurrentDir ]
-            aConfig[ _cCurrentPanel ] := aPanelSelect
+            aConfig[ _cCurrentPanel ] := iif( aPanelSelect == aPanelLeft, "Left", "Right" )
             hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( aConfig ) )
          ENDIF
          EXIT
