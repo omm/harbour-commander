@@ -75,7 +75,6 @@ PROCEDURE Main()
 
    /* hb_cwd () returns the full current working directory containing the disk and final path separator */
    /* restore configuration*/
-
    aConfig := hb_deserialize( hb_memoread( "hc.cfg" ) )
    if ! HB_ISARRAY( aConfig )
       ConfigInit()
@@ -1497,13 +1496,20 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 STATIC PROCEDURE ComdLineDisplay( aPanel )
 
    LOCAL nMaxRow := MaxRow(), nMaxCol := MaxCol()
+   LOCAL cPromptEnd
+
+   IF "Windows" $ os()
+      cPromptEnd := ">"
+   ELSE
+      cPromptEnd := "$"
+   ENDIF
 
    DispBegin()
 
    hb_DispOutAt( nMaxRow - 1, 0, ;
-      PadR( aPanel[ _cCurrentDir ] + SubStr( aPanel[ _cComdLine ], 1 + aPanel[ _nComdColNo ], nMaxCol + aPanel[ _nComdColNo ] ), nMaxCol ), 0x7 )
+      PadR( aPanel[ _cCurrentDir ] + cPromptEnd + SubStr( aPanel[ _cComdLine ], 1 + aPanel[ _nComdColNo ], nMaxCol + aPanel[ _nComdColNo ] ), nMaxCol ), 0x7 )
 
-   SetPos( nMaxRow - 1, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) )
+   SetPos( nMaxRow - 1, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) + 1 )
 
    DispEnd()
 
