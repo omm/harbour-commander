@@ -223,8 +223,6 @@ STATIC PROCEDURE Prompt()
    LOCAL nErrorCode
    LOCAL cNewDrive
    LOCAL i
-   LOCAL nSelectWin
-   LOCAL nwrow1, nwcol, nwlastrow, nwlastcol
    LOCAL lCtrlO := .F.
    LOCAL _nPanelActive := 0
    LOCAL _nPanelRowBar := 0
@@ -918,8 +916,8 @@ STATIC PROCEDURE FunctionKey_F2()
 STATIC PROCEDURE FunctionKey_F3( aPanel )
 
    LOCAL nPos
-   LOCAL aTarget := {}, aItem, aDirScan
-   LOCAL nLengthName := 0
+   LOCAL /* aTarget := {}, */ aItem /*, aDirScan */
+/*   LOCAL nLengthName := 0 */
    LOCAL nSizeDir
 
    nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
@@ -1318,7 +1316,7 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
 STATIC PROCEDURE FunctionKey_F9( )
 
    LOCAL nTop, nLeft, nRight
-   LOCAL cScreen, cScreenSub
+   LOCAL /*cScreen,*/ cScreenSub
    LOCAL nKey, nKeyStd
    LOCAL lReDraw := .T.
    LOCAL lContinue := .T.
@@ -1620,12 +1618,14 @@ STATIC PROCEDURE ComdLineDisplay( )
 //   LOCAL nMaxRow, nMaxCol
    LOCAL cPromptEnd
    LOCAL aPanel := GetPanelActive
+/*
    LOCAL nWin0 := wselect()
    local nwnum := wnum()
    local wrow := wlastrow()
    local wcol := wlastcol()
    local wlastrow := wlastrow()
    local wlastcol := wlastcol()
+*/
 
    IF "Windows" $ os()
       cPromptEnd := ">"
@@ -1633,11 +1633,13 @@ STATIC PROCEDURE ComdLineDisplay( )
       cPromptEnd := "$"
    ENDIF
    WSelect( aConfig[ nCmdHndl ] )
+/*
    nwin0 := wselect()
    wrow := wrow()
    wcol := wcol()
    wlastrow := wlastrow()
    wlastcol := wlastcol()
+*/
    DispBegin()
 
    hb_DispOutAt( 0, 0, ;
@@ -2074,7 +2076,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
    LOCAL nTop, nLeft, nBottom, nRight
    LOCAL nChoice := 1
    LOCAL nMRow, nMCol
-   LOCAL nWinAlert
+/*   LOCAL nWinAlert */
 
    DO CASE
    CASE ValType( cTitle ) == "U"
@@ -2142,7 +2144,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
          //WClose( 1 )
          WSetShadow( 0x8 )
-         nWinAlert := WOpen( nTop, nLeft, nBottom, nRight, .T. )
+         WOpen( nTop, nLeft, nBottom, nRight, .T. )
 
          hb_DispBox( 0, 0, nMaxRow, nMaxCol, hb_UTF8ToStrBox( " █       " ), nColorNorm )
          hb_DispOutAt( 0, 0, Center( cTitle ), hb_bitShift( nColorNorm, 4 ) )
@@ -2270,7 +2272,7 @@ STATIC FUNCTION HC_MenuF2()
    LOCAL nChoice := 1
    LOCAL nRowPos := 1, nColPos := 2
    LOCAL nMRow, nMCol
-   LOCAL nWinMnu
+/*   LOCAL nWinMnu */
 
    IF ! hb_vfExists( StartUpPath() + "hc.menu" )
 
@@ -2314,7 +2316,7 @@ STATIC FUNCTION HC_MenuF2()
          nRight  := Int( ( nMaxCol + nColLength ) / 2 ) - 1 + 2
 
          WSetShadow( 0x8 )
-         nWinMnu := WOpen( nTop, nLeft, nBottom, nRight, .T. )
+         WOpen( nTop, nLeft, nBottom, nRight, .T. )
 
          hb_DispBox( 0, 0, nMaxRow, nMaxCol, hb_UTF8ToStrBox( " █       " ), 0x9f )
          hb_DispOutAt( 0, 0, Center( /*hb_UserName() +*/ "Main menu" ), 0xf0 )
@@ -2451,13 +2453,14 @@ STATIC PROCEDURE HCEdit( cFileName, lArg )
    LOCAL cSubString
    LOCAL lToggleInsert := .F.
    LOCAL nKey, nKeyStd
-   LOCAL nOldRow, nOldCol
-   LOCAL cScreen
+/*   LOCAL nOldRow, nOldCol */
+/*   LOCAL cScreen */
    LOCAL tsDateTime
-   LOCAL nEdtHndl
+/*   LOCAL nEdtHndl */
 
-   nOldRow := Row()
+/*   nOldRow := Row()
    nOldCol := Col()
+*/
    WOpen( 0, 0, aConfig[ _nMaxRow ], aConfig[ _nMaxCol ] )
 
    IF HB_ISSTRING( cFileName ) // ?
