@@ -102,7 +102,7 @@ PROCEDURE Main()
 
    aConfig[ _nMaxRow ] := MaxRow()
    aConfig[ _nMaxCol ] := MaxCol()
-
+altd()
    Prompt()
 
    hb_Scroll()
@@ -236,25 +236,6 @@ STATIC PROCEDURE Prompt()
    LOCAL cTerminal := ""
 #endif
 
-   /* Create the first window (handle is 1), it's for commands, outputs, etc...
-      It has initial size is one row from 0 to maxcol() at maxrow() - 1 position
-   */
-   IF ( aConfig[ nCmdHndl ] := wOpen( aConfig[ _nMaxRow ] - 1, 0, aConfig[ _nMaxRow ] - 1, aConfig[ _nMaxCol ] ) ) == -1
-      /* if can't create a window, stop app */
-      RETURN
-   else
-//      SetCursor( SC_NORMAL )
-/*
-      @0,0 say hb_ntos( wselect() ) + ", " + hb_ntos( wnum() ) + ", " + hb_ntos( maxrow() ) + ", " + hb_ntos( maxcol() )
-      wformat()
-      wbox(1)
-      wformat()
-*/
-   ENDIF
-
-   /* Create the window for bottom bar */
-   aConfig[ nBBarHndl ] := wOpen( aConfig[ _nMaxRow ], 0, aConfig[ _nMaxRow ], aConfig[ _nMaxCol ] )
-
    /*
       Ok, now fetch the data
    */
@@ -312,6 +293,8 @@ STATIC PROCEDURE Prompt()
             GetPanels[ idPanelLeft ][ _nWinHndl ] := NIL
             GetPanels[ idPanelRight ][ _nWinHndl ] := NIL
             aConfig[ _aStackWindow ] := aWinStack
+            aConfig[ nCmdHndl ] := NIL
+            aConfig[ nBBarHndl ] := NIL
             hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( aConfig ) )
          ENDIF
          EXIT
@@ -379,10 +362,22 @@ STATIC PROCEDURE Prompt()
             GetPanels[ idPanelRight, _nComdCol ] := 0
          ENDIF
 
-         //PanelDisplay( aPanels[ idPanelLeft ] )
-         //PanelDisplay( aPanels[ idPanelRight ] )
          ShowSession()
          EXIT
+
+      CASE HB_K_RESIZE
+
+         WClose( GetPanels[ idPanelLeft, _nWinHndl ] )
+         GetPanels[ idPanelLeft, _nWinHndl ] := NIL
+         WClose( GetPanels[ idPanelRight, _nWinHndl ] )
+         GetPanels[ idPanelRight, _nWinHndl ] := NIL
+         WClose( aConfig[ nCmdHndl ] )
+         aConfig[ nCmdHndl ] := NIL
+         WClose( aConfig[ nBBarHndl ] )
+         aConfig[ nBBarHndl ] := NIL
+         WSelect( 0 )
+         aConfig[ _nMaxRow ] := MaxRow()
+         aConfig[ _nMaxCol ] := MaxCol()
 
       CASE K_MOUSEMOVE
 
@@ -479,8 +474,8 @@ STATIC PROCEDURE Prompt()
 
          ENDIF
 
-         PanelDisplay( aPanels[ idPanelLeft ] )
-         PanelDisplay( aPanels[ idPanelRight ] )
+         PanelDisplay( GetPanels[ idPanelLeft ] )
+         PanelDisplay( GetPanels[ idPanelRight ] )
          EXIT
 
       CASE K_LBUTTONDOWN
@@ -525,8 +520,8 @@ STATIC PROCEDURE Prompt()
 
          ENDIF
 
-         PanelDisplay( aPanels[ idPanelLeft ] )
-         PanelDisplay( aPanels[ idPanelRight ] )
+         PanelDisplay( GetPanels[ idPanelLeft ] )
+         PanelDisplay( GetPanels[ idPanelRight ] )
          EXIT
 
       CASE K_MWFORWARD
@@ -1615,37 +1610,32 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
 STATIC PROCEDURE ComdLineDisplay( )
 
-//   LOCAL nMaxRow, nMaxCol
    LOCAL cPromptEnd
    LOCAL aPanel := GetPanelActive
-/*
-   LOCAL nWin0 := wselect()
-   local nwnum := wnum()
-   local wrow := wlastrow()
-   local wcol := wlastcol()
-   local wlastrow := wlastrow()
-   local wlastcol := wlastcol()
-*/
 
    IF "Windows" $ os()
       cPromptEnd := ">"
    ELSE
       cPromptEnd := "$"
    ENDIF
-   WSelect( aConfig[ nCmdHndl ] )
-/*
-   nwin0 := wselect()
-   wrow := wrow()
-   wcol := wcol()
-   wlastrow := wlastrow()
-   wlastcol := wlastcol()
-*/
+
+   IF aConfig[ nCmdHndl ] == NIL
+      /* Create the first window (handle is 1), it's for commands, outputs, etc...
+         It has initial size is one row from 0 to maxcol() at maxrow() - 1 position
+      */
+      IF ( aConfig[ nCmdHndl ] := wOpen( aConfig[ _nMaxRow ] - 1, 0, aConfig[ _nMaxRow ] - 1, aConfig[ _nMaxCol ] ) ) == -1
+         /* if can't create a window, stop app */
+         RETURN
+      ENDIF
+   ELSE
+      WSelect( aConfig[ nCmdHndl ] )
+   ENDIF
+
    DispBegin()
 
    hb_DispOutAt( 0, 0, ;
       PadR( aPanel[ _cCurrentDir ] + cPromptEnd + SubStr( aPanel[ _cComdLine ], 1 + aPanel[ _nComdColNo ], MaxCol() + aPanel[ _nComdColNo ] ), MaxCol() ), 0x7 )
 
-   //SetPos( WLastRow() - 1, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) + 1 )
    SetPos( 0, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) + 1 )
 
    DispEnd()
@@ -1821,7 +1811,13 @@ STATIC PROCEDURE BottomBar()
    LOCAL cSpaces
    LOCAL nCol
 
-   WSelect( aConfig[ nBBarHndl ] )
+   IF aConfig[ nBBarHndl ] == NIL
+      /* Create the window for bottom bar */
+      aConfig[ nBBarHndl ] := wOpen( aConfig[ _nMaxRow ], 0, aConfig[ _nMaxRow ], aConfig[ _nMaxCol ] )
+   ELSE
+      WSelect( aConfig[ nBBarHndl ] )
+   ENDIF
+
    nRow := MaxRow()
    nCol := Int( MaxCol() / 10 ) + 1
 

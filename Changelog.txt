@@ -7,6 +7,10 @@
    Entries may not always be in chronological/commit order.
    See license at the end of file. */
 
+2020-04-32 01:30 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hc.prg
+    + redraw window after resize (HB_K_RESIZE)
+
 2020-04-30 00:20 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * hbmk.hbm
     * uncomment options "-w3 -es2"
