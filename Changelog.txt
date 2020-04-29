@@ -7,7 +7,13 @@
    Entries may not always be in chronological/commit order.
    See license at the end of file. */
 
-2020-04-32 01:30 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+2020-04-30 01:56 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * Changlog.txt
+    ! fix date in last entry
+  * hc.prg
+    ! fix cursor moving by K_UP and K_DOWN 
+
+2020-04-30 01:30 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * hc.prg
     + redraw window after resize (HB_K_RESIZE)
 

@@ -102,7 +102,7 @@ PROCEDURE Main()
 
    aConfig[ _nMaxRow ] := MaxRow()
    aConfig[ _nMaxCol ] := MaxCol()
-altd()
+
    Prompt()
 
    hb_Scroll()
@@ -243,23 +243,17 @@ STATIC PROCEDURE Prompt()
 
    DO WHILE lContinue
 
-      /* */
       DispBegin()
-/*
-      nwrow1 := wlastrow()
-      nSelectWin := wSelect( 0 )
-      nwlastrow := wlastrow()
-*/
       
       IF ( GetPanels[ idPanelLeft ][ _nWinHndl ] == NIL .OR. GetPanels[ idPanelRight ][ _nWinHndl ] == NIL ) .OR.;
          _nPanelActive != GetPanels[ idPanelActive ] .OR.;
-         _nPanelRowBar != GetPanelActive[ _nRowBar ]
+         _nPanelRowBar != GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
 
          IF _nPanelActive != GetPanels[ idPanelActive ]
             _nPanelActive := GetPanels[ idPanelActive ]
          ENDIF
-         IF _nPanelRowBar != GetPanelActive[ _nRowBar ]
-            _nPanelRowBar := GetPanelActive[ _nRowBar ]
+         IF _nPanelRowBar != GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
+            _nPanelRowBar := GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
          ENDIF
 
          AutoSize()
