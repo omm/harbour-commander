@@ -7,6 +7,12 @@
    Entries may not always be in chronological/commit order.
    See license at the end of file. */
 
+2020-04-29 22:55 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hc.prg
+    * now, use window functions for panels, command line, bottom bar, etc...,
+      changed some logic,
+      some functionality broken, work in progress but no so fast
+
 2020-04-15 23:31 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * hc.prg
     + adds characters that used in a command-line interface to

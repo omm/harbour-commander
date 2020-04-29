@@ -17,26 +17,29 @@
 #define OSUPPER( x )  ( x )
 #endif
 
+#define _nTop        1
+#define _nLeft       2
+#define _nBottom     3
+#define _nRight      4
+#define _cCurrentDir 5
+#define _aDirectory  6
+#define _nRowBar     7
+#define _nRowNo      8
+#define _cComdLine   9
+#define _nComdCol    10
+#define _nComdColNo  11
+#define _nIdPanel    12
+#define _nWinHndl    13
 
-#define _nTop         1
-#define _nLeft        2
-#define _nBottom      3
-#define _nRight       4
-#define _cCurrentDir  5
-#define _aDirectory   6
-#define _nRowBar      7
-#define _nRowNo       8
-#define _cComdLine    9
-#define _nComdCol     10
-#define _nComdColNo   11
+#define _nElements   13
 
-#define _nElements    11
-
-#define _cCurrentDirLeft  1
-#define _cCurrentDirRight 2
-#define _cCurrentPanel    3
-
-#define _nElementConfig 3
+STATIC aConfig
+#define _nElementConfig 5
+#define _aStackWindow   1
+#define _nMaxRow        2  // here save MaxRow() of physical screen
+#define _nMaxCol        3  // here save MaxCol() of physical screen
+#define nCmdHndl        4  // handle of window for cmd
+#define nBBarHndl       5  // handle of window for bottom bar
 
 /* FError() */
 #define MEANING       2
@@ -45,10 +48,18 @@
 
 #define FXO_SHARELOCK  0x4000  /* emulate DOS SH_DENY* mode in POSIX OS */
 
-STATIC aPanelLeft
-STATIC aPanelRight
-STATIC aPanelSelect
-STATIC aConfig
+STATIC aWinStack
+#define nWinSession           1
+#define GetSession            aWinStack[ nWinSession ]
+#define GetPanels             aWinStack[ GetSession ]
+#define GetPanelActive        aWinStack[ GetSession, GetPanels[ idPanelActive ] ]
+#define SetPanelActive( xId ) GetPanels[ idPanelActive ] := xId
+#define IsPanelActive( xId )  iif( GetPanelActive[ _nIdPanel ] == xId, .T., .F. )
+
+STATIC aPanels          // array of panels and id of active panel
+#define idPanelLeft     1
+#define idPanelRight    2
+#define idPanelActive   3   // Active panel { 1 - left, 2 - right }
 
 PROCEDURE Main()
 
@@ -70,21 +81,27 @@ PROCEDURE Main()
    hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_ROWS )
    hb_gtInfo( HB_GTI_WINTITLE, "Harbour Commander" )
 
-   aPanelLeft := PanelInit()
-   aPanelRight := PanelInit()
-
    /* hb_cwd () returns the full current working directory containing the disk and final path separator */
    /* restore configuration*/
    aConfig := hb_deserialize( hb_memoread( "hc.cfg" ) )
-   if ! HB_ISARRAY( aConfig )
+
+   IF ! HB_ISARRAY( aConfig )
       ConfigInit()
+      /* add new sessins to windows stack */
+      IF !hb_IsArray( aWinStack )
+         aWinStack := {}
+         /* in first element we save active session number, initial is 2 (should be greater then 1) */
+         AAdd( aWinStack, 2 )
+         /* next elements of aWinStack is array( 3 ), { left panel, right panel , active panel (default: left) } */
+         AAdd( aWinStack, { PanelInit( idPanelLeft ), PanelInit( idPanelRight ), idPanelLeft } )
+      ENDIF
+      aConfig[ _aStackWindow ] := aWinStack
+   ELSE
+      aWinStack := aConfig[ _aStackWindow ]
    ENDIF
-   PanelFetchList( aPanelLeft, aConfig[ _cCurrentDirLeft ] )
-   PanelFetchList( aPanelRight, aConfig[ _cCurrentDirRight ] )
 
-   AutoSize()
-
-   aPanelSelect :=  iif( aConfig[ _cCurrentPanel ] == "Left", aPanelLeft, aPanelRight )
+   aConfig[ _nMaxRow ] := MaxRow()
+   aConfig[ _nMaxCol ] := MaxCol()
 
    Prompt()
 
@@ -97,13 +114,15 @@ STATIC PROCEDURE ConfigInit()
 
    aConfig := Array( _nElementConfig )
 
-   aConfig[ _cCurrentDirLeft  ] := hb_cwd()
-   aConfig[ _cCurrentDirRight ] := hb_cwd()
-   aConfig[ _cCurrentPanel ] := "Left"
+   aConfig[ _aStackWindow ] := {}
+   aConfig[ _nMaxRow ] := NIL
+   aConfig[ _nMaxCol ] := NIL
+   aConfig[ nCmdHndl ] := NIL
+   aConfig[ nBBarHndl ] := NIL
 
    RETURN
 
-STATIC FUNCTION PanelInit()
+STATIC FUNCTION PanelInit( IdPanel )
 
    LOCAL aInit
 
@@ -113,23 +132,33 @@ STATIC FUNCTION PanelInit()
    aInit[ _nLeft       ] := 0
    aInit[ _nBottom     ] := 0
    aInit[ _nRight      ] := 0
-   aInit[ _cCurrentDir ] := ""
+   aInit[ _cCurrentDir ] := hb_cwd()
    aInit[ _aDirectory  ] := {}
    aInit[ _nRowBar     ] := 1
    aInit[ _nRowNo      ] := 0
    aInit[ _cComdLine   ] := ""
    aInit[ _nComdCol    ] := 0
    aInit[ _nComdColNo  ] := 0
+   aInit[ _nIdPanel    ] := IdPanel
+   aInit[ _nWinHndl    ] := NIL     // handle to window
 
    RETURN aInit
 
-STATIC PROCEDURE PanelFetchList( aPanel, cDir )
+STATIC PROCEDURE FetchData()
+
+   PanelFetchList( GetPanels[ idPanelLeft ] )
+   PanelFetchList( GetPanels[ idPanelRight ] )
+
+   AutoSize()
+
+   RETURN
+
+STATIC PROCEDURE PanelFetchList( aPanel )
 
    LOCAL i, nPos, a2Dot, aDots := { ".", ".." }, iDot
 
-   CheckDirExists( @cDir )
+   CheckDirExists( @aPanel[ _cCurrentDir ] )
 
-   aPanel[ _cCurrentDir ] := cDir
    aPanel[ _aDirectory ] := hb_vfDirectory( aPanel[ _cCurrentDir ], "HSD" )
 
    /* Add .T. to each element of the array. */
@@ -164,11 +193,10 @@ STATIC PROCEDURE CheckDirExists( cDir )
 
    RETURN
 
-
 STATIC PROCEDURE AutoSize()
 
-   Resize( aPanelLeft, 0, 0, MaxRow() - 2, MaxCol() / 2 )
-   Resize( aPanelRight, 0, MaxCol() / 2 + 1, MaxRow() - 2, MaxCol() )
+   Resize( GetPanels[ idPanelLeft ], 0, 0, aConfig[ _nMaxRow ] - 2, aConfig[ _nMaxCol ] / 2 )
+   Resize( GetPanels[ idPanelRight ], 0, aConfig[ _nMaxCol ] / 2 + 1, aConfig[ _nMaxRow ] - 2, aConfig[ _nMaxCol ] )
 
    RETURN
 
@@ -195,6 +223,11 @@ STATIC PROCEDURE Prompt()
    LOCAL nErrorCode
    LOCAL cNewDrive
    LOCAL i
+   LOCAL nSelectWin
+   LOCAL nwrow1, nwcol, nwlastrow, nwlastcol
+   LOCAL lCtrlO := .F.
+   LOCAL _nPanelActive := 0
+   LOCAL _nPanelRowBar := 0
 
 #if defined( __PLATFORM__WINDOWS )
 
@@ -205,31 +238,65 @@ STATIC PROCEDURE Prompt()
    LOCAL cTerminal := ""
 #endif
 
+   /* Create the first window (handle is 1), it's for commands, outputs, etc...
+      It has initial size is one row from 0 to maxcol() at maxrow() - 1 position
+   */
+   IF ( aConfig[ nCmdHndl ] := wOpen( aConfig[ _nMaxRow ] - 1, 0, aConfig[ _nMaxRow ] - 1, aConfig[ _nMaxCol ] ) ) == -1
+      /* if can't create a window, stop app */
+      RETURN
+   else
+//      SetCursor( SC_NORMAL )
+/*
+      @0,0 say hb_ntos( wselect() ) + ", " + hb_ntos( wnum() ) + ", " + hb_ntos( maxrow() ) + ", " + hb_ntos( maxcol() )
+      wformat()
+      wbox(1)
+      wformat()
+*/
+   ENDIF
+
+   /* Create the window for bottom bar */
+   aConfig[ nBBarHndl ] := wOpen( aConfig[ _nMaxRow ], 0, aConfig[ _nMaxRow ], aConfig[ _nMaxCol ] )
+
+   /*
+      Ok, now fetch the data
+   */
+   FetchData()
+
    DO WHILE lContinue
 
+      /* */
       DispBegin()
+/*
+      nwrow1 := wlastrow()
+      nSelectWin := wSelect( 0 )
+      nwlastrow := wlastrow()
+*/
+      
+      IF ( GetPanels[ idPanelLeft ][ _nWinHndl ] == NIL .OR. GetPanels[ idPanelRight ][ _nWinHndl ] == NIL ) .OR.;
+         _nPanelActive != GetPanels[ idPanelActive ] .OR.;
+         _nPanelRowBar != GetPanelActive[ _nRowBar ]
 
-      IF nMaxRow != MaxRow() .OR. nMaxCol != MaxCol()
+         IF _nPanelActive != GetPanels[ idPanelActive ]
+            _nPanelActive := GetPanels[ idPanelActive ]
+         ENDIF
+         IF _nPanelRowBar != GetPanelActive[ _nRowBar ]
+            _nPanelRowBar := GetPanelActive[ _nRowBar ]
+         ENDIF
 
-         hb_Scroll()
          AutoSize()
 
-         PanelDisplay( aPanelLeft )
-         PanelDisplay( aPanelRight )
-
-         ComdLineDisplay( aPanelSelect )
+         PanelDisplay( GetPanels[ idPanelLeft ] )
+         PanelDisplay( GetPanels[ idPanelRight ] )
 
          BottomBar()
 
          nMaxRow := MaxRow()
          nMaxCol := MaxCol()
       ENDIF
-
+      ComdLineDisplay( )
       DispEnd()
-
-      ComdLineDisplay( aPanelSelect )
-      PanelDisplay( aPanelSelect )
-
+      WSelect( aConfig[ nCmdHndl ] )
+      SetCursor( SC_NORMAL )
       nKey := Inkey( 0 )
       nKeyStd := hb_keyStd( nKey )
 
@@ -237,28 +304,28 @@ STATIC PROCEDURE Prompt()
 
       CASE K_ESC
 
-         IF ! Empty( aPanelSelect[ _cComdLine ] )
-            aPanelSelect[ _cComdLine ] := ""
-            aPanelSelect[ _nComdCol ] := 0
-            ComdLineDisplay( aPanelSelect )
+         IF ! Empty( GetPanelActive[ _cComdLine ] )
+            GetPanelActive[ _cComdLine ] := ""
+            GetPanelActive[ _nComdCol ] := 0
+            ComdLineDisplay( )
          ELSE
             lContinue := .F.
             /* save configuration on exit*/
-            aConfig[ _cCurrentDirLeft  ] := aPanelLeft[ _cCurrentDir ]
-            aConfig[ _cCurrentDirRight ] := aPanelRight[ _cCurrentDir ]
-            aConfig[ _cCurrentPanel ] := iif( aPanelSelect == aPanelLeft, "Left", "Right" )
+            GetPanels[ idPanelLeft ][ _nWinHndl ] := NIL
+            GetPanels[ idPanelRight ][ _nWinHndl ] := NIL
+            aConfig[ _aStackWindow ] := aWinStack
             hb_MemoWrit( StartUpPath() + "hc.cfg", hb_Serialize( aConfig ) )
          ENDIF
          EXIT
 
       CASE K_ENTER
 
-         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
-         IF Empty( aPanelSelect[ _cComdLine ] )
+         nPos := GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
+         IF Empty( GetPanelActive[ _cComdLine ] )
             /* if we stand on a file */
-            IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+            IF At( "D", GetPanelActive[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 #if defined( __PLATFORM__WINDOWS )
-               hb_run( Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+               hb_run( Chr( 34 ) + GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
 #else
                IF hb_vfExists( "/usr/bin/nautilus" )
                   cTerminal = "gnome-terminal"
@@ -271,51 +338,52 @@ STATIC PROCEDURE Prompt()
                ELSEIF hb_vfExists( "/usr/bin/dolphin" )
                   cTerminal = "konsole"
                ENDIF
-               hb_processRun( "sh -c 'file " + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + "'" + Chr( 34 ),, @result )
+               hb_processRun( "sh -c 'file " + GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] + "'" + Chr( 34 ),, @result )
                IF At( "ELF", result ) > 0
                   ctuxCmd = ""
                ELSEIF At( "script", result ) > 0
                   ctuxCmd = cterminal + " -x "
                ENDIF
-               hb_run( ctuxCmd + Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+               hb_run( ctuxCmd + Chr( 34 ) + GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
 #endif
             ELSE
-               ChangeDir( aPanelSelect )
+               ChangeDir( GetPanelActive )
             ENDIF
          ELSE
 
-            // aPanelSelect[ _cComdLine ] := aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _cComdLine ]
+            // GetPanelActive[ _cComdLine ] := GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _cComdLine ]
 
             hb_Scroll()
-            hb_run( aPanelSelect[ _cComdLine ] )
-            aPanelSelect[ _cComdLine ] := ""
+            hb_run( GetPanelActive[ _cComdLine ] )
+            GetPanelActive[ _cComdLine ] := ""
             Inkey( 0 )
             nMaxRow := 0
-            aPanelSelect[ _nComdCol ] := 0
+            GetPanelActive[ _nComdCol ] := 0
 
-            PanelRefresh( aPanelSelect )
+            PanelRefresh( GetPanelActive )
          ENDIF
 
          EXIT
 
       CASE K_TAB
 
-         IF aPanelSelect == aPanelLeft
-            aPanelSelect := aPanelRight
-            aPanelSelect[ _cComdLine ] := aPanelLeft[ _cComdLine ]
-            aPanelSelect[ _nComdCol ] := aPanelLeft[ _nComdCol ]
-            aPanelLeft[ _cComdLine ] := ""
-            aPanelLeft[ _nComdCol ] := 0
+         IF IsPanelActive( idPanelLeft )
+            SetPanelActive( idPanelRight )
+            GetPanelActive[ _cComdLine ] := GetPanels[ idPanelLeft, _cComdLine ]
+            GetPanelActive[ _nComdCol ] := GetPanels[ idPanelLeft, _nComdCol ]
+            GetPanels[ idPanelLeft, _cComdLine ] := ""
+            GetPanels[ idPanelLeft, _nComdCol ] := 0
          ELSE
-            aPanelSelect := aPanelLeft
-            aPanelSelect[ _cComdLine ] := aPanelRight[ _cComdLine ]
-            aPanelSelect[ _nComdCol ] := aPanelRight[ _nComdCol ]
-            aPanelRight[ _cComdLine ] := ""
-            aPanelRight[ _nComdCol ] := 0
+            SetPanelActive( idPanelLeft )
+            GetPanelActive[ _cComdLine ] := GetPanels[ idPanelRight, _cComdLine ]
+            GetPanelActive[ _nComdCol ] := GetPanels[ idPanelRight, _nComdCol ]
+            GetPanels[ idPanelRight, _cComdLine ] := ""
+            GetPanels[ idPanelRight, _nComdCol ] := 0
          ENDIF
 
-         PanelDisplay( aPanelLeft )
-         PanelDisplay( aPanelRight )
+         //PanelDisplay( aPanels[ idPanelLeft ] )
+         //PanelDisplay( aPanels[ idPanelRight ] )
+         ShowSession()
          EXIT
 
       CASE K_MOUSEMOVE
@@ -350,11 +418,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_LDBLCLK
 
-         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
+         nPos := GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
          /* if we stand on a file */
-         IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+         IF At( "D", GetPanelActive[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 #if defined( __PLATFORM__WINDOWS )
-            hb_run( Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+            hb_run( Chr( 34 ) + GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
 #else
             IF hb_vfExists( "/usr/bin/nautilus" )
                cTerminal = "gnome-terminal"
@@ -367,16 +435,16 @@ STATIC PROCEDURE Prompt()
             ELSEIF hb_vfExists( "/usr/bin/dolphin" )
                cTerminal = "konsole"
             ENDIF
-            hb_processRun( "sh -c 'file " + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + "'" + Chr( 34 ),, @result )
+            hb_processRun( "sh -c 'file " + GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] + "'" + Chr( 34 ),, @result )
             IF At( "ELF", result ) > 0
                ctuxCmd = ""
             ELSEIF At( "script", result ) > 0
                ctuxCmd = cterminal + " -x "
             ENDIF
-            hb_run( ctuxCmd + Chr( 34 ) + aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
+            hb_run( ctuxCmd + Chr( 34 ) + GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] + Chr( 34 ) )
 #endif
          ELSE
-            ChangeDir( aPanelSelect )
+            ChangeDir( GetPanelActive )
          ENDIF
 
          EXIT
@@ -387,34 +455,34 @@ STATIC PROCEDURE Prompt()
          nMCol := MCol()
 
          IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol < Int( MaxCol() / 2 ) + 1
-            aPanelSelect := aPanelLeft
-            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
-               aPanelSelect[ _nRowBar ] := nMRow
+            GetPanelActive := aPanels[ idPanelLeft ]
+            IF nMRow <= Len( GetPanelActive[ _aDirectory ] )
+               GetPanelActive[ _nRowBar ] := nMRow
             ENDIF
          ENDIF
 
          IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol > Int( MaxCol() / 2 )
-            aPanelSelect := aPanelRight
-            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
-               aPanelSelect[ _nRowBar ] := nMRow
+            GetPanelActive := aPanels[ idPanelRight ]
+            IF nMRow <= Len( GetPanelActive[ _aDirectory ] )
+               GetPanelActive[ _nRowBar ] := nMRow
             ENDIF
          ENDIF
 
-         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
-         IF aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
+         nPos := GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
+         IF GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
 
             /* Marking the deletion status of the current item in the table */
-            IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
-               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
+            IF GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ]
+               GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
             ELSE
                /* return the delete status of the current item in the array */
-               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
+               GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
             ENDIF
 
          ENDIF
 
-         PanelDisplay( aPanelLeft )
-         PanelDisplay( aPanelRight )
+         PanelDisplay( aPanels[ idPanelLeft ] )
+         PanelDisplay( aPanels[ idPanelRight ] )
          EXIT
 
       CASE K_LBUTTONDOWN
@@ -423,16 +491,16 @@ STATIC PROCEDURE Prompt()
          nMCol := MCol()
 
          IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol < Int( MaxCol() / 2 ) + 1
-            aPanelSelect := aPanelLeft
-            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
-               aPanelSelect[ _nRowBar ] := nMRow
+            GetPanelActive := aPanels[ idPanelLeft ]
+            IF nMRow <= Len( GetPanelActive[ _aDirectory ] )
+               GetPanelActive[ _nRowBar ] := nMRow
             ENDIF
          ENDIF
 
          IF nMRow > 0 .AND. nMRow < MaxRow() - 1 .AND. nMCol > Int( MaxCol() / 2 )
-            aPanelSelect := aPanelRight
-            IF nMRow <= Len( aPanelSelect[ _aDirectory ] )
-               aPanelSelect[ _nRowBar ] := nMRow
+            GetPanelActive := aPanels[ idPanelRight ]
+            IF nMRow <= Len( GetPanelActive[ _aDirectory ] )
+               GetPanelActive[ _nRowBar ] := nMRow
             ENDIF
          ENDIF
 
@@ -442,12 +510,12 @@ STATIC PROCEDURE Prompt()
             SWITCH Int( MCol() / nCol ) + 1
             CASE 1  ; FunctionKey_F1() ; EXIT
             CASE 2  ; FunctionKey_F2() ; EXIT
-            CASE 3  ; FunctionKey_F3( aPanelSelect ) ; EXIT
-            CASE 4  ; FunctionKey_F4( aPanelSelect ) ; EXIT
-            CASE 5  ; FunctionKey_F5( aPanelSelect ) ; EXIT
-            CASE 6  ; FunctionKey_F6( aPanelSelect ) ; EXIT
-            CASE 7  ; FunctionKey_F7( aPanelSelect ) ; EXIT
-            CASE 8  ; FunctionKey_F8( aPanelSelect ) ; EXIT
+            CASE 3  ; FunctionKey_F3( GetPanelActive ) ; EXIT
+            CASE 4  ; FunctionKey_F4( GetPanelActive ) ; EXIT
+            CASE 5  ; FunctionKey_F5( GetPanelActive ) ; EXIT
+            CASE 6  ; FunctionKey_F6( GetPanelActive ) ; EXIT
+            CASE 7  ; FunctionKey_F7( GetPanelActive ) ; EXIT
+            CASE 8  ; FunctionKey_F8( GetPanelActive ) ; EXIT
             CASE 9  ; EXIT
             CASE 10
                IF HC_Alert( "The Harbour Commander", "Do you want to quit the Harbour Commander?", { "Yes", "No!" }, 0x8f ) == 1
@@ -459,17 +527,17 @@ STATIC PROCEDURE Prompt()
 
          ENDIF
 
-         PanelDisplay( aPanelLeft )
-         PanelDisplay( aPanelRight )
+         PanelDisplay( aPanels[ idPanelLeft ] )
+         PanelDisplay( aPanels[ idPanelRight ] )
          EXIT
 
       CASE K_MWFORWARD
 
-         IF aPanelSelect[ _nRowBar ] > 1
-            --aPanelSelect[ _nRowBar ]
+         IF GetPanelActive[ _nRowBar ] > 1
+            --GetPanelActive[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _nRowNo ] >= 1
-               --aPanelSelect[ _nRowNo ]
+            IF GetPanelActive[ _nRowNo ] >= 1
+               --GetPanelActive[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -477,11 +545,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_MWBACKWARD
 
-         IF aPanelSelect[ _nRowBar ] < aPanelSelect[ _nBottom ] - 1 .AND. aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
-            ++aPanelSelect[ _nRowBar ]
+         IF GetPanelActive[ _nRowBar ] < GetPanelActive[ _nBottom ] - 1 .AND. GetPanelActive[ _nRowBar ] <= Len( GetPanelActive[ _aDirectory ] ) - 1
+            ++GetPanelActive[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _nRowNo ] + aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
-               ++aPanelSelect[ _nRowNo ]
+            IF GetPanelActive[ _nRowNo ] + GetPanelActive[ _nRowBar ] <= Len( GetPanelActive[ _aDirectory ] ) - 1
+               ++GetPanelActive[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -489,11 +557,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_UP
 
-         IF aPanelSelect[ _nRowBar ] > 1
-            --aPanelSelect[ _nRowBar ]
+         IF GetPanelActive[ _nRowBar ] > 1
+            --GetPanelActive[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _nRowNo ] >= 1
-               --aPanelSelect[ _nRowNo ]
+            IF GetPanelActive[ _nRowNo ] >= 1
+               --GetPanelActive[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -501,11 +569,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_DOWN
 
-         IF aPanelSelect[ _nRowBar ] < aPanelSelect[ _nBottom ] - 1 .AND. aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
-            ++aPanelSelect[ _nRowBar ]
+         IF GetPanelActive[ _nRowBar ] < GetPanelActive[ _nBottom ] - 1 .AND. GetPanelActive[ _nRowBar ] <= Len( GetPanelActive[ _aDirectory ] ) - 1
+            ++GetPanelActive[ _nRowBar ]
          ELSE
-            IF aPanelSelect[ _nRowNo ] + aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
-               ++aPanelSelect[ _nRowNo ]
+            IF GetPanelActive[ _nRowNo ] + GetPanelActive[ _nRowBar ] <= Len( GetPanelActive[ _aDirectory ] ) - 1
+               ++GetPanelActive[ _nRowNo ]
             ENDIF
          ENDIF
 
@@ -513,11 +581,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_LEFT
 
-         IF aPanelSelect[ _nComdCol ] > 0
-            aPanelSelect[ _nComdCol ]--
+         IF GetPanelActive[ _nComdCol ] > 0
+            GetPanelActive[ _nComdCol ]--
          ELSE
-            IF aPanelSelect[ _nComdColNo ] >= 1
-               aPanelSelect[ _nComdColNo ]--
+            IF GetPanelActive[ _nComdColNo ] >= 1
+               GetPanelActive[ _nComdColNo ]--
             ENDIF
          ENDIF
 
@@ -525,11 +593,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_RIGHT
 
-         IF aPanelSelect[ _nComdCol ] < nMaxCol - Len( aPanelSelect[ _cCurrentDir ] ) .AND. aPanelSelect[ _nComdCol ] < Len( aPanelSelect[ _cComdLine ] )
-            aPanelSelect[ _nComdCol ]++
+         IF GetPanelActive[ _nComdCol ] < nMaxCol - Len( GetPanelActive[ _cCurrentDir ] ) .AND. GetPanelActive[ _nComdCol ] < Len( GetPanelActive[ _cComdLine ] )
+            GetPanelActive[ _nComdCol ]++
          ELSE
-            IF aPanelSelect[ _nComdColNo ] + aPanelSelect[ _nComdCol ] < Len( aPanelSelect[ _cComdLine ] )
-               aPanelSelect[ _nComdColNo ]++
+            IF GetPanelActive[ _nComdColNo ] + GetPanelActive[ _nComdCol ] < Len( GetPanelActive[ _cComdLine ] )
+               GetPanelActive[ _nComdColNo ]++
             ENDIF
          ENDIF
 
@@ -537,56 +605,56 @@ STATIC PROCEDURE Prompt()
 
       CASE K_HOME
 
-         aPanelSelect[ _nComdCol ] := 0
+         GetPanelActive[ _nComdCol ] := 0
 
          EXIT
 
       CASE K_END
 
-         aPanelSelect[ _nComdCol ] := Len( aPanelSelect[ _cComdLine ] )
+         GetPanelActive[ _nComdCol ] := Len( GetPanelActive[ _cComdLine ] )
 
          EXIT
 
       CASE K_PGUP
 
-         IF aPanelSelect[ _nRowBar ] <= 1
-            IF aPanelSelect[ _nRowNo ] - nMaxRow >= 0
-               aPanelSelect[ _nRowNo ] -= nMaxRow
+         IF GetPanelActive[ _nRowBar ] <= 1
+            IF GetPanelActive[ _nRowNo ] - nMaxRow >= 0
+               GetPanelActive[ _nRowNo ] -= nMaxRow
             ENDIF
          ENDIF
 
-         aPanelSelect[ _nRowBar ] := 1
+         GetPanelActive[ _nRowBar ] := 1
          EXIT
 
       CASE K_PGDN
 
-         IF aPanelSelect[ _nRowBar ] >= nMaxRow - 3
-            IF aPanelSelect[ _nRowNo ] + nMaxRow  <= Len( aPanelSelect[ _aDirectory ] )
-               aPanelSelect[ _nRowNo ] += nMaxRow
+         IF GetPanelActive[ _nRowBar ] >= nMaxRow - 3
+            IF GetPanelActive[ _nRowNo ] + nMaxRow  <= Len( GetPanelActive[ _aDirectory ] )
+               GetPanelActive[ _nRowNo ] += nMaxRow
             ENDIF
          ENDIF
 
-         aPanelSelect[ _nRowBar ] := Min( nMaxRow - 3, Len( aPanelSelect[ _aDirectory ] ) - aPanelSelect[ _nRowNo ] )
+         GetPanelActive[ _nRowBar ] := Min( nMaxRow - 3, Len( GetPanelActive[ _aDirectory ] ) - GetPanelActive[ _nRowNo ] )
          EXIT
 
       CASE K_INS
 
-         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
-         IF aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
+         nPos := GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
+         IF GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ] != ".." // ?
 
             /* Marking the deletion status of the current item in the table */
-            IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
-               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
+            IF GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ]
+               GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
             ELSE
                /* return the delete status of the current item in the array */
-               aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
+               GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
             ENDIF
 
-            IF aPanelSelect[ _nRowBar ] < aPanelSelect[ _nBottom ] - 1 .AND. aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
-               ++aPanelSelect[ _nRowBar ]
+            IF GetPanelActive[ _nRowBar ] < GetPanelActive[ _nBottom ] - 1 .AND. GetPanelActive[ _nRowBar ] <= Len( GetPanelActive[ _aDirectory ] ) - 1
+               ++GetPanelActive[ _nRowBar ]
             ELSE
-               IF aPanelSelect[ _nRowNo ] + aPanelSelect[ _nRowBar ] <= Len( aPanelSelect[ _aDirectory ] ) - 1
-                  ++aPanelSelect[ _nRowNo ]
+               IF GetPanelActive[ _nRowNo ] + GetPanelActive[ _nRowBar ] <= Len( GetPanelActive[ _aDirectory ] ) - 1
+                  ++GetPanelActive[ _nRowNo ]
                ENDIF
             ENDIF
 
@@ -596,19 +664,30 @@ STATIC PROCEDURE Prompt()
 
       CASE K_DEL
 
-         IF aPanelSelect[ _nComdCol ] >= 0
-            aPanelSelect[ _cComdLine ] := Stuff( aPanelSelect[ _cComdLine ], aPanelSelect[ _nComdCol ] + 1, 1, "" )
+         IF GetPanelActive[ _nComdCol ] >= 0
+            GetPanelActive[ _cComdLine ] := Stuff( GetPanelActive[ _cComdLine ], GetPanelActive[ _nComdCol ] + 1, 1, "" )
          ENDIF
 
          EXIT
 
       CASE K_BS
 
-         IF aPanelSelect[ _nComdCol ] > 0
-            aPanelSelect[ _cComdLine ] := Stuff( aPanelSelect[ _cComdLine ], aPanelSelect[ _nComdCol ], 1, "" )
-            aPanelSelect[ _nComdCol ]--
+         IF GetPanelActive[ _nComdCol ] > 0
+            GetPanelActive[ _cComdLine ] := Stuff( GetPanelActive[ _cComdLine ], GetPanelActive[ _nComdCol ], 1, "" )
+            GetPanelActive[ _nComdCol ]--
          ENDIF
 
+         EXIT
+
+      CASE K_CTRL_O
+
+         IF ! lCtrlO
+            lCtrlO := .T.
+            ShowSession( 1 )
+         ELSE
+            lCtrlO := .F.
+            ShowSession()
+         ENDIF
          EXIT
 
       CASE K_F1
@@ -625,37 +704,37 @@ STATIC PROCEDURE Prompt()
 
       CASE K_F3
 
-         FunctionKey_F3( aPanelSelect )
+         FunctionKey_F3( GetPanelActive )
 
          EXIT
 
       CASE K_F4
 
-         FunctionKey_F4( aPanelSelect )
+         FunctionKey_F4( GetPanelActive )
 
          EXIT
 
       CASE K_F5
 
-         FunctionKey_F5( aPanelSelect )
+         FunctionKey_F5( GetPanelActive )
 
          EXIT
 
       CASE K_F6
 
-         FunctionKey_F6( aPanelSelect )
+         FunctionKey_F6( GetPanelActive )
 
          EXIT
 
       CASE K_F7
 
-         FunctionKey_F7( aPanelSelect )
+         FunctionKey_F7( GetPanelActive )
 
          EXIT
 
       CASE K_F8
 
-         FunctionKey_F8( aPanelSelect )
+         FunctionKey_F8( GetPanelActive )
 
          EXIT
 
@@ -679,8 +758,8 @@ STATIC PROCEDURE Prompt()
          IF ( cNewDrive := HC_Alert( "Drive letter", "Choose left drive:", AllDrives(), 0x8a, 0x0 ) ) != 0
 
                hb_CurDrive( AllDrives()[ cNewDrive ] )
-               PanelFetchList( aPanelLeft, hb_cwd() )
-               PanelDisplay( aPanelLeft )
+               PanelFetchList( aPanels[ idPanelLeft ], hb_cwd() )
+               PanelDisplay( aPanels[ idPanelLeft ] )
 
          ENDIF
 
@@ -693,8 +772,8 @@ STATIC PROCEDURE Prompt()
          IF ( cNewDrive := HC_Alert( "Drive letter", "Choose right drive:", AllDrives(), 0x8a, 0x1 ) ) != 0
 
             hb_CurDrive( AllDrives()[ cNewDrive ] )
-            PanelFetchList( aPanelRight, hb_cwd() )
-            PanelDisplay( aPanelRight )
+            PanelFetchList( aPanels[ idPanelRight ], hb_cwd() )
+            PanelDisplay( aPanels[ idPanelRight ] )
 
          ENDIF
 
@@ -703,11 +782,11 @@ STATIC PROCEDURE Prompt()
 
       CASE K_SH_F4
 
-         nPos := aPanelSelect[ _nRowBar ] + aPanelSelect[ _nRowNo ]
+         nPos := GetPanelActive[ _nRowBar ] + GetPanelActive[ _nRowNo ]
          /* if we stand on a file */
-         IF At( "D", aPanelSelect[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
+         IF At( "D", GetPanelActive[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 
-            IF HB_ISSTRING( cFileName := MsgBox( "Create file.", aPanelSelect[ _cCurrentDir ] + aPanelSelect[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( cFileName := MsgBox( "Create file.", GetPanelActive[ _cCurrentDir ] + GetPanelActive[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
                IF hb_vfExists( cFileName )
 
                   HCEdit( cFileName, .T. )
@@ -723,7 +802,7 @@ STATIC PROCEDURE Prompt()
                         ENDIF
                      ENDIF
 
-                     PanelRefresh( aPanelSelect )
+                     PanelRefresh( GetPanelActive )
 
                   ELSE
 
@@ -741,7 +820,7 @@ STATIC PROCEDURE Prompt()
          ELSE
             /* if we stand on the catalog */
             IF HB_ISSTRING( cFileName := MsgBox( "Create file.", NIL, { "Yes", "No!" } ) )
-               IF ( pHandle := hb_vfOpen( aPanelSelect[ _cCurrentDir ] + cFileName, FO_CREAT + FO_TRUNC + FO_WRITE ) ) != NIL
+               IF ( pHandle := hb_vfOpen( GetPanelActive[ _cCurrentDir ] + cFileName, FO_CREAT + FO_TRUNC + FO_WRITE ) ) != NIL
 
                   IF ! hb_vfClose( pHandle )
                      IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -751,7 +830,7 @@ STATIC PROCEDURE Prompt()
                      ENDIF
                   ENDIF
 
-                  PanelRefresh( aPanelSelect, cFileName )
+                  PanelRefresh( GetPanelActive, cFileName )
 
                ELSE
 
@@ -769,17 +848,17 @@ STATIC PROCEDURE Prompt()
          EXIT
 
       CASE 43 /* select a group of files. */
-         FOR i := 1 TO Len( aPanelSelect[ _aDirectory ] )
-            IF aPanelSelect[ _aDirectory ][ i ][ F_NAME ] != ".."
-               aPanelSelect[ _aDirectory ][ i ][ F_STATUS ] := .F.
+         FOR i := 1 TO Len( GetPanelActive[ _aDirectory ] )
+            IF GetPanelActive[ _aDirectory ][ i ][ F_NAME ] != ".."
+               GetPanelActive[ _aDirectory ][ i ][ F_STATUS ] := .F.
             ENDIF
          NEXT
          EXIT
 
       CASE 95 /* Unselect a group of files. */
-         FOR i := 1 TO Len( aPanelSelect[ _aDirectory ] )
-            IF aPanelSelect[ _aDirectory ][ i ][ F_NAME ] != ".."
-               aPanelSelect[ _aDirectory ][ i ][ F_STATUS ] := .T.
+         FOR i := 1 TO Len( GetPanelActive[ _aDirectory ] )
+            IF GetPanelActive[ _aDirectory ][ i ][ F_NAME ] != ".."
+               GetPanelActive[ _aDirectory ][ i ][ F_STATUS ] := .T.
             ENDIF
          NEXT
          EXIT
@@ -788,11 +867,11 @@ STATIC PROCEDURE Prompt()
 
          IF ( nKeyStd >= 32 .AND. nKeyStd <= 126 ) .OR. ( nKeyStd >= 160 .AND. nKeyStd <= 255 ) .OR. ! hb_keyChar( nKeyStd ) == ""
 
-            aPanelSelect[ _cComdLine ] := Stuff( aPanelSelect[ _cComdLine ], aPanelSelect[ _nComdCol ] + aPanelSelect[ _nComdColNo ] + 1, 0, hb_keyChar( nKeyStd ) )
-            IF aPanelSelect[ _nComdCol ] < nMaxCol - Len( aPanelSelect[ _cCurrentDir ] )
-               aPanelSelect[ _nComdCol ]++
+            GetPanelActive[ _cComdLine ] := Stuff( GetPanelActive[ _cComdLine ], GetPanelActive[ _nComdCol ] + GetPanelActive[ _nComdColNo ] + 1, 0, hb_keyChar( nKeyStd ) )
+            IF GetPanelActive[ _nComdCol ] < nMaxCol - Len( GetPanelActive[ _cCurrentDir ] )
+               GetPanelActive[ _nComdCol ]++
             ELSE
-               aPanelSelect[ _nComdColNo ]++
+               GetPanelActive[ _nComdColNo ]++
             ENDIF
 
          ENDIF
@@ -805,6 +884,9 @@ STATIC PROCEDURE Prompt()
 
 STATIC PROCEDURE FunctionKey_F1()
 
+   LOCAL cAddr := "https://github.com/omm/harbour-commander/issues/new"
+   LOCAL cStdOut, cOutErr
+
    IF HC_Alert( "Report an error", ;
          "Creating an issue;" + ;
          ";Issues can be used to keep track of bugs, enhancements, or;" + ;
@@ -816,9 +898,11 @@ STATIC PROCEDURE FunctionKey_F1()
          { "Click New issue." } ) == 1
 
 #if defined( __PLATFORM__WINDOWS )
-      hb_run( "start " + "https://github.com/rjopek/harbour-commander/issues/new" )
+      hb_processRun( "start " + cAddr,, @cStdOut, @cOuterr )
+      hb_alert( cStdOut + hb_eol() + "and" + hb_eol() + cOutErr )
+      //hb_run( "start " + cAddr )
 #else
-      hb_run( "xdg-open " + "https://github.com/rjopek/harbour-commander/issues/new" )
+      hb_run( "xdg-open " + cAddr )
 #endif
 
    ENDIF
@@ -836,14 +920,34 @@ STATIC PROCEDURE FunctionKey_F3( aPanel )
    LOCAL nPos
    LOCAL aTarget := {}, aItem, aDirScan
    LOCAL nLengthName := 0
+   LOCAL nSizeDir
 
    nPos := aPanel[ _nRowBar ] + aPanel[ _nRowNo ]
+
    /* if we stand on a file */
    IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 
       HCEdit( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ], .F. )
 
    ELSE
+      IF aPanel[ _aDirectory ][ nPos ][ F_NAME ] == ".."
+         nSizeDir := 0
+         FOR EACH aItem IN aPanel[ _aDirectory ]
+            nSizeDir += aItem[ 2 ]
+         NEXT
+      ENDIF
+      MsgBox( "Size of files in " + aPanel[ _cCurrentDir ],;
+         { transform( nSizeDir, "999,999,999" ) +   " bytes",;
+           transform( nSizeDir/ 1024, "999,999,999" ) + "   KiB",;
+           transform( nSizeDir/ 1024/ 1024, "999,999.999" ) + "   MiB" }, { "OK" } )
+
+/*
+      hb_alert( "Size of files in " + aPanel[ _cCurrentDir ] + hb_eol();
+         + transform( nSizeDir, "999,999,999" ) +   " bytes" + hb_eol();
+         + transform( nSizeDir/ 1024, "999,999,999" ) + "   KiB" + hb_eol();
+         + transform( nSizeDir/ 1024/ 1024, "999,999.999" ) + "   MiB" )
+*/
+/*
       aDirScan := hb_DirScan( aPanel[ _aDirectory ][ nPos ][ F_NAME ], hb_osFileMask() )
       AScan( aDirScan, {| x | nLengthName := Max( nLengthName, Len( x[ 1 ] ) ) } )
 
@@ -858,6 +962,7 @@ STATIC PROCEDURE FunctionKey_F3( aPanel )
       SaveFile( aTarget, "DirScan.txt" ) // where to save ?
 
       HCEdit( "DirScan.txt", .F. )
+*/
    ENDIF
 
    RETURN
@@ -886,17 +991,17 @@ STATIC PROCEDURE FunctionKey_F5( aPanel )
       HC_Alert( "Copy", "The item to be copy has not been selected.",, 0x8f )
    ELSE
 
-      IF aPanel == aPanelLeft
+      IF aPanel == aPanels[ idPanelLeft ]
          /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
-            IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelRight[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
 
-               // IF hb_vfCopyFile( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
-               IF HC_CopyFile( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelRight[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+               // IF hb_vfCopyFile( aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ], ;
+               IF HC_CopyFile( aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] ) == 0
 
-                  PanelRefresh( aPanelRight )
+                  PanelRefresh( aPanels[ idPanelRight ] )
 
                ELSE
                   IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -909,13 +1014,13 @@ STATIC PROCEDURE FunctionKey_F5( aPanel )
 
             ENDIF
          ELSE
-            IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelRight[ _cCurrentDir ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelRight ][ _cCurrentDir ], { "Yes", "No!" } ) )
 
-               IF HC_CopyDirectory( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelRight[ _cCurrentDir ] ) == 0 // ?
+               IF HC_CopyDirectory( aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelRight ][ _cCurrentDir ] ) == 0 // ?
 
-                  PanelRefresh( aPanelRight )
+                  PanelRefresh( aPanels[ idPanelRight ] )
 
                ELSE
                   IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -929,13 +1034,13 @@ STATIC PROCEDURE FunctionKey_F5( aPanel )
       ELSE
          /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
-            IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelLeft[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Copy file " + '"' + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ], { "Yes", "No!" } ) )
 
-               IF HC_CopyFile( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelLeft[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+               IF HC_CopyFile( aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] ) == 0
 
-                  PanelRefresh( aPanelLeft )
+                  PanelRefresh( aPanels[ idPanelLeft ] )
 
                ELSE
                   IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -946,13 +1051,13 @@ STATIC PROCEDURE FunctionKey_F5( aPanel )
                ENDIF
             ENDIF
          ELSE
-            IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelLeft[ _cCurrentDir ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Copy directory " + '"' + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelLeft ][ _cCurrentDir ], { "Yes", "No!" } ) )
 
-               IF HC_CopyDirectory( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelLeft[ _cCurrentDir ] ) == 0 // ?
+               IF HC_CopyDirectory( aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelLeft ][ _cCurrentDir ] ) == 0 // ?
 
-                  PanelRefresh( aPanelLeft )
+                  PanelRefresh( aPanels[ idPanelLeft ] )
 
                ELSE
                   IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -978,20 +1083,20 @@ STATIC PROCEDURE FunctionKey_F6( aPanel )
       HC_Alert( "Rename or move", "The item to be copy has not been selected.",, 0x8f )
    ELSE
 
-      IF aPanel == aPanelLeft
+      IF aPanel == aPanels[ idPanelLeft ]
          /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
-            IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelRight[ _cCurrentDir ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelRight ][ _cCurrentDir ], { "Yes", "No!" } ) )
 
-               IF HC_CopyFile( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelRight[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+               IF HC_CopyFile( aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] ) == 0
 
-                  PanelRefresh( aPanelRight )
+                  PanelRefresh( aPanels[ idPanelRight ] )
 
-                  IF hb_DirRemoveAll( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+                  IF hb_DirRemoveAll( aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
 
-                     PanelRefresh( aPanelLeft )
+                     PanelRefresh( aPanels[ idPanelLeft ] )
 
                   ELSE
                      IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -1011,17 +1116,17 @@ STATIC PROCEDURE FunctionKey_F6( aPanel )
 
             ENDIF
          ELSE
-            IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelRight[ _cCurrentDir ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelRight ][ _cCurrentDir ], { "Yes", "No!" } ) )
 
-               IF HC_CopyDirectory( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelRight[ _cCurrentDir ] ) == 0 // ?
+               IF HC_CopyDirectory( aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelRight ][ _cCurrentDir ] ) == 0 // ?
 
-                  PanelRefresh( aPanelRight )
+                  PanelRefresh( aPanels[ idPanelRight ] )
 
-                  IF hb_DirRemoveAll( aPanelLeft[ _cCurrentDir ] + aPanelLeft[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+                  IF hb_DirRemoveAll( aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelLeft ][ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
 
-                     PanelRefresh( aPanelLeft )
+                     PanelRefresh( aPanels[ idPanelLeft ] )
 
                   ELSE
                      IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -1043,17 +1148,17 @@ STATIC PROCEDURE FunctionKey_F6( aPanel )
       ELSE
          /* if we stand on a file */
          IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
-            IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelLeft[ _cCurrentDir ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Move file " + '"' + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelLeft ][ _cCurrentDir ], { "Yes", "No!" } ) )
 
-               IF HC_CopyFile( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelLeft[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
+               IF HC_CopyFile( aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelLeft ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] ) == 0
 
-                  PanelRefresh( aPanelLeft )
+                  PanelRefresh( aPanels[ idPanelLeft ] )
 
-                  IF hb_DirRemoveAll( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+                  IF hb_DirRemoveAll( aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
 
-                     PanelRefresh( aPanelRight )
+                     PanelRefresh( aPanels[ idPanelRight ] )
 
                   ELSE
                      IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -1072,17 +1177,17 @@ STATIC PROCEDURE FunctionKey_F6( aPanel )
                ENDIF
             ENDIF
          ELSE
-            IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
-                  aPanelLeft[ _cCurrentDir ], { "Yes", "No!" } ) )
+            IF HB_ISSTRING( MsgBox( "Move directory " + '"' + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] + '"' + " to", ;
+                  aPanels[ idPanelLeft ][ _cCurrentDir ], { "Yes", "No!" } ) )
 
-               IF HC_CopyDirectory( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ], ;
-                     aPanelLeft[ _cCurrentDir ] ) == 0 // ?
+               IF HC_CopyDirectory( aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ], ;
+                     aPanels[ idPanelLeft ][ _cCurrentDir ] ) == 0 // ?
 
-                  PanelRefresh( aPanelLeft )
+                  PanelRefresh( aPanels[ idPanelLeft ] )
 
-                  IF hb_DirRemoveAll( aPanelRight[ _cCurrentDir ] + aPanelRight[ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
+                  IF hb_DirRemoveAll( aPanels[ idPanelRight ][ _cCurrentDir ] + aPanels[ idPanelRight ][ _aDirectory ][ nPos ][ F_NAME ] ) == .T.
 
-                     PanelRefresh( aPanelRight )
+                     PanelRefresh( aPanels[ idPanelRight ] )
 
                   ELSE
                      IF ( nErrorCode := AScan( FileError(), {| x | x[ 1 ] == FError() } ) ) > 0
@@ -1148,8 +1253,8 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
       IF At( "D", aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ) == 0
 
          /* Marking the deletion status of the current item in the table */
-         IF aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ]
-            aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
+         IF GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ]
+            GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ] := .F.
          ENDIF
 
          PanelDisplay( aPanel )
@@ -1157,7 +1262,7 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
          IF HC_Alert( "Delete file", "Do you really want to delete the selected file:;" + '"' + aPanel[ _aDirectory ][ nPos ][ F_NAME ] + '"', { "Yes", "No!" } ) == 1
 
             // IF hb_vfErase( aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ] ) == 0
-            IF HC_DeleteFile( aPanelSelect ) == 0
+            IF HC_DeleteFile( GetPanelActive ) == 0
 
                PanelRefresh( aPanel )
 
@@ -1170,7 +1275,7 @@ STATIC PROCEDURE FunctionKey_F8( aPanel )
             ENDIF
          ELSE
             /* return the delete status of the current item in the array */
-            aPanelSelect[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
+            GetPanelActive[ _aDirectory ][ nPos ][ F_STATUS ] := .T.
          ENDIF
 
       ELSE
@@ -1228,13 +1333,17 @@ STATIC PROCEDURE FunctionKey_F9( )
 
    nTop := 0
    nLeft := 0
+
+   WSelect( 0 )
    nRight := MaxCol()
 
    aEval( aF9Menu, {| x, y | Aadd( aF9MenuPos, aF9MenuPos[ y ] + Len( x ) + 1 ) },, Len( aF9Menu ) - 1 )
 
-   cScreen := SaveScreen( nTop, nLeft, nTop, nRight )
+//   cScreen := SaveScreen( nTop, nLeft, nTop, nRight )
 
-   hb_DispBox( nTop, nLeft, nTop, nRight, hb_UTF8ToStrBox( " █       " ), 0x22 )
+//   hb_DispBox( nTop, nLeft, nTop, nRight, hb_UTF8ToStrBox( " █       " ), 0x22 )
+   WOpen( nTop, nLeft, nTop, nRight )
+   hb_DispBox( 0, 0, nTop, nRight, hb_UTF8ToStrBox( " █       " ), 0x22 )
 
    DO WHILE lContinue
       IF lReDraw
@@ -1252,6 +1361,7 @@ STATIC PROCEDURE FunctionKey_F9( )
       SWITCH nKeyStd
       CASE K_ESC
          lContinue := .F.
+         ShoWSession()
          EXIT
 
       CASE K_LEFT
@@ -1291,7 +1401,7 @@ STATIC PROCEDURE FunctionKey_F9( )
 
    ENDDO
 
-   RestScreen( nTop, nLeft, nTop, nRight, cScreen )
+//   RestScreen( nTop, nLeft, nTop, nRight, cScreen )
 
    RETURN
 
@@ -1461,23 +1571,35 @@ STATIC PROCEDURE PanelDisplay( aPanel )
       nLengthName := Max( nLengthName, Len( x[ 1 ] ) ), ;
       nLengthSize := Max( nLengthSize, Len( Str( x[ 2 ] ) ) ) } )
 
+   IF aPanel[ _nWinHndl ] == NIL
+      SetColor( NToColor( 0x1f ) )
+      aPanel[ _nWinHndl ] := WOpen( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ] )
+//      SetCursor( SC_NONE )
+      //@-1,1 say hb_ntos( aPanel[ _nWinHndl ] ) + ", " + hb_ntos( wselect() )
+   ELSE
+      WSelect( aPanel[ _nWinHndl ] )
+      hb_Scroll()
+   ENDIF
+   WFormat()
+   IF GetPanels[ idPanelActive ] == aPanel[ _nIdPanel ]
+      WBox( )
+   ELSE
+      WBox( 1 )
+   ENDIF
+
    DispBegin()
-
-   hb_DispBox( aPanel[ _nTop ], aPanel[ _nLeft ], aPanel[ _nBottom ], aPanel[ _nRight ],;
-      iif( aPanelSelect == aPanel, HB_B_DOUBLE_UNI, HB_B_SINGLE_UNI ) + " ", 0x1f )
-
    nPos += aPanel[ _nRowNo ]
-   FOR nRow := aPanel[ _nTop ] + 1 TO aPanel[ _nBottom ] - 1
+   FOR nRow := aPanel[ _nTop ] TO aPanel[ _nBottom ] - 1
 
       IF nPos <= Len( aPanel[ _aDirectory ] )
-         hb_DispOutAt( nRow, aPanel[ _nLeft ] + 1, ;
+         hb_DispOutAt( nRow, 0, ;
             PadR( Expression( nLengthName, nLengthSize, ;
             aPanel[ _aDirectory ][ nPos ][ F_NAME ], ;
             aPanel[ _aDirectory ][ nPos ][ F_SIZE ], ;
             aPanel[ _aDirectory ][ nPos ][ F_DATE ], ;
             aPanel[ _aDirectory ][ nPos ][ F_ATTR ] ), ;
             aPanel[ _nRight ] - aPanel[ _nLeft ] - 1 ), ;
-            iif( aPanelSelect == aPanel .AND. nPos == aPanel[ _nRowBar ] + aPanel[ _nRowNo ], ;
+            iif( GetPanelActive[ _nIdPanel ] == aPanel[ _nIdPanel ] .AND. nPos == aPanel[ _nRowBar ] + aPanel[ _nRowNo ], ;
             iif( ! aPanel[ _aDirectory ][ nPos ][ F_STATUS ], 0x3e, 0x30 ), ;
             ColoringSyntax( aPanel[ _aDirectory ][ nPos ][ F_ATTR ], aPanel[ _aDirectory ][ nPos ][ F_STATUS ] ) ) )
          ++nPos
@@ -1493,44 +1615,56 @@ STATIC PROCEDURE PanelDisplay( aPanel )
 
    RETURN
 
-STATIC PROCEDURE ComdLineDisplay( aPanel )
+STATIC PROCEDURE ComdLineDisplay( )
 
-   LOCAL nMaxRow := MaxRow(), nMaxCol := MaxCol()
+//   LOCAL nMaxRow, nMaxCol
    LOCAL cPromptEnd
+   LOCAL aPanel := GetPanelActive
+   LOCAL nWin0 := wselect()
+   local nwnum := wnum()
+   local wrow := wlastrow()
+   local wcol := wlastcol()
+   local wlastrow := wlastrow()
+   local wlastcol := wlastcol()
 
    IF "Windows" $ os()
       cPromptEnd := ">"
    ELSE
       cPromptEnd := "$"
    ENDIF
-
+   WSelect( aConfig[ nCmdHndl ] )
+   nwin0 := wselect()
+   wrow := wrow()
+   wcol := wcol()
+   wlastrow := wlastrow()
+   wlastcol := wlastcol()
    DispBegin()
 
-   hb_DispOutAt( nMaxRow - 1, 0, ;
-      PadR( aPanel[ _cCurrentDir ] + cPromptEnd + SubStr( aPanel[ _cComdLine ], 1 + aPanel[ _nComdColNo ], nMaxCol + aPanel[ _nComdColNo ] ), nMaxCol ), 0x7 )
+   hb_DispOutAt( 0, 0, ;
+      PadR( aPanel[ _cCurrentDir ] + cPromptEnd + SubStr( aPanel[ _cComdLine ], 1 + aPanel[ _nComdColNo ], MaxCol() + aPanel[ _nComdColNo ] ), MaxCol() ), 0x7 )
 
-   SetPos( nMaxRow - 1, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) + 1 )
+   //SetPos( WLastRow() - 1, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) + 1 )
+   SetPos( 0, aPanel[ _nComdCol ] + Len( aPanel[ _cCurrentDir ] ) + 1 )
 
    DispEnd()
-
+   
    RETURN
-
 
 STATIC PROCEDURE PanelTitleDisplay( aPanel )
 
    LOCAL cPanelTitle := aPanel[ _cCurrentDir ]
    LOCAL nWidthPanel
 
-   nWidthPanel := aPanel[ _nRight ] - aPanel[ _nLeft ] - 2
+   nWidthPanel := WLastCol() - WCol() - 1 /*aPanel[ _nRight ] - aPanel[ _nLeft ] - 2*/
    IF Len( cPanelTitle ) < nWidthPanel
-      cPanelTitle := PadR( aPanel[ _cCurrentDir ], Min( Len( aPanel[ _cCurrentDir ] ), nWidthPanel ), Space( 0 ) )
+      cPanelTitle := PadR( aPanel[ _cCurrentDir ], Min( Len( aPanel[ _cCurrentDir ] ), nWidthPanel ), Space( 1 ) )
    ELSE
       cPanelTitle := SubStr( cPanelTitle, 1, 3 ) + "..." + Right( cPanelTitle, nWidthPanel - 5 )
    ENDIF
 
    DispBegin()
 
-   hb_DispOutAt( aPanel[ _nTop ], aPanel[ _nLeft ] + 1, cPanelTitle, 0x1f )
+   hb_DispOutAt( -1, 0, cPanelTitle, "W/B" )
 
    DispEnd()
 
@@ -1577,19 +1711,19 @@ STATIC PROCEDURE PanelRefresh( aPanel, nRowBar2cDir )
 
    LOCAL _nRowBarNew
 
-   IF aPanelLeft[ _cCurrentDir ] == aPanelRight[ _cCurrentDir ]
+   IF aPanels[ idPanelLeft ][ _cCurrentDir ] == aPanels[ idPanelRight ][ _cCurrentDir ]
 
-      PanelFetchList( aPanelLeft, aPanelLeft[ _cCurrentDir ] )
-      PanelFetchList( aPanelRight, aPanelRight[ _cCurrentDir ] )
+      PanelFetchList( aPanels[ idPanelLeft ], aPanels[ idPanelLeft ][ _cCurrentDir ] )
+      PanelFetchList( aPanels[ idPanelRight ], aPanels[ idPanelRight ][ _cCurrentDir ] )
 
       IF HB_ISSTRING( nRowBar2cDir )
-         _nRowBarNew := GetRowBarPos( aPanelLeft, nRowBar2cDir )
-         aPanelLeft[ _nRowBar ] := _nRowBarNew
-         aPanelRight[ _nRowBar ] := _nRowBarNew
+         _nRowBarNew := GetRowBarPos( aPanels[ idPanelLeft ], nRowBar2cDir )
+         aPanels[ idPanelLeft ][ _nRowBar ] := _nRowBarNew
+         aPanels[ idPanelRight ][ _nRowBar ] := _nRowBarNew
       ENDIF
 
-      PanelDisplay( aPanelLeft )
-      PanelDisplay( aPanelRight )
+      PanelDisplay( aPanels[ idPanelLeft ] )
+      PanelDisplay( aPanels[ idPanelRight ] )
 
    ELSE
 
@@ -1614,6 +1748,24 @@ STATIC FUNCTION GetRowBarPos( aPanel, nRowBar2cDir )
 
    RETURN iif( nPos == 0, 1, nPos )
 
+PROCEDURE ShowSession( nMode )
+
+   LOCAL aWin
+
+   IF nMode == NIL
+      aWin := {;
+            iif( IsPanelActive( idPanelLeft ), GetPanels[ idPanelRight, _nWinHndl ], GetPanels[ idPanelLeft, _nWinHndl ] ),;
+            iif( IsPanelActive( idPanelLeft ), GetPanels[ idPanelLeft, _nWinHndl ], GetPanels[ idPanelRight, _nWinHndl ] ) }
+
+      WSelect( aWin[ 1 ] )
+      WSelect( aWin[ 2 ] )
+   ELSEIF nMode == 1
+      WSelect( 0, .T. )
+   ENDIF
+   WSelect( aConfig[ nCmdHndl ] )
+
+   RETURN
+
 STATIC PROCEDURE ChangeDir( aPanel )
 
    LOCAL nPos, cDir, cDir0
@@ -1627,23 +1779,23 @@ STATIC PROCEDURE ChangeDir( aPanel )
       cDir := aPanel[ _cCurrentDir ]
       cDir0 := SubStr( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) + 1 )
       cDir0 := SubStr( cDir0, 1, Len( cDir0 ) - 1 )
-      cDir  := Left( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) )
-      PanelFetchList( aPanel, cDir )
+      /*cDir*/ aPanel[ _cCurrentDir ]  := Left( cDir, RAt( hb_ps(), Left( cDir, Len( cDir ) - 1 ) ) )
+      PanelFetchList( aPanel )
       nPosLast := Max( AScan( aPanel[ _aDirectory ], {| x | x[ F_NAME ] == cDir0 } ), 1 )
 
-      IF nPosLast > aPanelSelect[ _nBottom ] - 1
-         aPanelSelect[ _nRowNo ] := nPosLast % ( aPanelSelect[ _nBottom ] - 1 )
-         aPanelSelect[ _nRowBar ] := aPanelSelect[ _nBottom ] - 1
+      IF nPosLast > GetPanelActive[ _nBottom ] - 1
+         GetPanelActive[ _nRowNo ] := nPosLast % ( GetPanelActive[ _nBottom ] - 1 )
+         GetPanelActive[ _nRowBar ] := GetPanelActive[ _nBottom ] - 1
       ELSE
-         aPanelSelect[ _nRowNo ]  := 0
-         aPanelSelect[ _nRowBar ] := nPosLast
+         GetPanelActive[ _nRowNo ]  := 0
+         GetPanelActive[ _nRowBar ] := nPosLast
       ENDIF
 
    ELSE
-      cDir := aPanel[ _cCurrentDir ] + aPanel[ _aDirectory ][ nPos ][ F_NAME ] + hb_ps()
+      aPanel[ _cCurrentDir ] += aPanel[ _aDirectory ][ nPos ][ F_NAME ] + hb_ps()
       aPanel[ _nRowBar ] := 1
       aPanel[ _nRowNo  ] := 0
-      PanelFetchList( aPanel, cDir )
+      PanelFetchList( aPanel )
    ENDIF
 
    RETURN
@@ -1663,9 +1815,13 @@ STATIC FUNCTION AllDrives()
 
 STATIC PROCEDURE BottomBar()
 
-   LOCAL nRow := MaxRow()
+   LOCAL nRow
    LOCAL cSpaces
-   LOCAL nCol := Int( MaxCol() / 10 ) + 1
+   LOCAL nCol
+
+   WSelect( aConfig[ nBBarHndl ] )
+   nRow := MaxRow()
+   nCol := Int( MaxCol() / 10 ) + 1
 
    cSpaces := Space( nCol - 8 )
 
@@ -1855,10 +2011,10 @@ STATIC FUNCTION MsgBox( cMessage, aMessage, aOptions )
          hb_Scroll()
          AutoSize()
 
-         PanelDisplay( aPanelLeft )
-         PanelDisplay( aPanelRight )
+         PanelDisplay( aPanels[ idPanelLeft ] )
+         PanelDisplay( aPanels[ idPanelRight ] )
 
-         ComdLineDisplay( aPanelSelect )
+         ComdLineDisplay( )
 
          BottomBar()
 
@@ -1918,6 +2074,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
    LOCAL nTop, nLeft, nBottom, nRight
    LOCAL nChoice := 1
    LOCAL nMRow, nMCol
+   LOCAL nWinAlert
 
    DO CASE
    CASE ValType( cTitle ) == "U"
@@ -1972,7 +2129,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
       /* save the second setting! */
       IF nMaxRow != MaxRow( .T. ) .OR. nMaxCol != iif( nArg == NIL, MaxCol( .T. ), iif( nArg == 0x0, Int( MaxCol( .T. ) / 2 ), MaxCol( .T. ) + Int( MaxCol( .T. ) / 2 ) ) )
 
-         WSelect( 0 )
+         WSelect( 1 )
 
          nMaxRow := MaxRow( .T. )
          /* the last parameter sets the dialog box: NIL middle, 0x0 to the left and 0x1 to the right */
@@ -1983,9 +2140,9 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
          nBottom := nTop + 4 + nLenMessage
          nRight  := Int( ( nMaxCol + nWidth ) / 2 ) - 1 + 2
 
-         WClose( 1 )
+         //WClose( 1 )
          WSetShadow( 0x8 )
-         WOpen( nTop, nLeft, nBottom, nRight, .T. )
+         nWinAlert := WOpen( nTop, nLeft, nBottom, nRight, .T. )
 
          hb_DispBox( 0, 0, nMaxRow, nMaxCol, hb_UTF8ToStrBox( " █       " ), nColorNorm )
          hb_DispOutAt( 0, 0, Center( cTitle ), hb_bitShift( nColorNorm, 4 ) )
@@ -2080,13 +2237,13 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
       CASE nKeyStd == HB_K_RESIZE
 
-         WClose( 1 )
+         //WClose( 1 )
 
          AutoSize()
 
-         PanelDisplay( aPanelLeft )
-         PanelDisplay( aPanelRight )
-         ComdLineDisplay( aPanelSelect )
+         PanelDisplay( aPanels[ idPanelLeft ] )
+         PanelDisplay( aPanels[ idPanelRight ] )
+         ComdLineDisplay( )
 
          BottomBar()
 
@@ -2094,7 +2251,7 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
    ENDDO
 
-   WClose( 1 )
+   WClose( )
    SetCursor( nOldCursor )
    // SetPos( nRowPos, nColPos )
 
@@ -2102,7 +2259,6 @@ STATIC FUNCTION HC_Alert( cTitle, xMessage, xOptions, nColorNorm, nArg )
 
 STATIC FUNCTION HC_MenuF2()
 
-   LOCAL nOldCursor := SetCursor( SC_NONE )
    LOCAL cFile := "hc.menu"
    LOCAL cCopyExample := ""
    LOCAL i, aLine, aMenu := {}, cLine
@@ -2114,6 +2270,7 @@ STATIC FUNCTION HC_MenuF2()
    LOCAL nChoice := 1
    LOCAL nRowPos := 1, nColPos := 2
    LOCAL nMRow, nMCol
+   LOCAL nWinMnu
 
    IF ! hb_vfExists( StartUpPath() + "hc.menu" )
 
@@ -2156,12 +2313,11 @@ STATIC FUNCTION HC_MenuF2()
          nBottom := nTop + 2 + Len( aMenu )
          nRight  := Int( ( nMaxCol + nColLength ) / 2 ) - 1 + 2
 
-         WClose( 1 )
          WSetShadow( 0x8 )
-         WOpen( nTop, nLeft, nBottom, nRight, .T. )
+         nWinMnu := WOpen( nTop, nLeft, nBottom, nRight, .T. )
 
          hb_DispBox( 0, 0, nMaxRow, nMaxCol, hb_UTF8ToStrBox( " █       " ), 0x9f )
-         hb_DispOutAt( 0, 0, Center( hb_UserName() + "  Menu" ), 0xf0 )
+         hb_DispOutAt( 0, 0, Center( /*hb_UserName() +*/ "Main menu" ), 0xf0 )
 
          hb_DispBox( 1, 0, MaxRow(), MaxCol(), HB_B_SINGLE_UNI, 0x9f )
 
@@ -2181,6 +2337,7 @@ STATIC FUNCTION HC_MenuF2()
 
       DispEnd()
 
+      SetCursor( SC_NONE )
       nKey := Inkey( 0 )
       nKeyStd := hb_keyStd( nKey )
 
@@ -2265,13 +2422,13 @@ STATIC FUNCTION HC_MenuF2()
 
       CASE nKeyStd == HB_K_RESIZE
 
-         WClose( 1 )
+         WClose( )
 
          AutoSize()
 
-         PanelDisplay( aPanelLeft )
-         PanelDisplay( aPanelRight )
-         ComdLineDisplay( aPanelSelect )
+         PanelDisplay( aPanels[ idPanelLeft ] )
+         PanelDisplay( aPanels[ idPanelRight ] )
+         ComdLineDisplay( )
 
          BottomBar()
 
@@ -2279,8 +2436,7 @@ STATIC FUNCTION HC_MenuF2()
 
    ENDDO
 
-   WClose( 1 )
-   SetCursor( nOldCursor )
+   WClose( )
 
    RETURN iif( nKey == 0, 0, nChoice )
 
@@ -2298,10 +2454,11 @@ STATIC PROCEDURE HCEdit( cFileName, lArg )
    LOCAL nOldRow, nOldCol
    LOCAL cScreen
    LOCAL tsDateTime
+   LOCAL nEdtHndl
 
    nOldRow := Row()
    nOldCol := Col()
-   cScreen := SaveScreen( 0, 0, MaxRow(), MaxCol() )
+   WOpen( 0, 0, aConfig[ _nMaxRow ], aConfig[ _nMaxCol ] )
 
    IF HB_ISSTRING( cFileName ) // ?
 
@@ -2609,8 +2766,7 @@ STATIC PROCEDURE HCEdit( cFileName, lArg )
       RETURN
    ENDIF
 
-   RestScreen( 0, 0, MaxRow(), MaxCol(), cScreen )
-   SetPos( nOldRow, nOldCol )
+   WClose()
 
    RETURN
 
