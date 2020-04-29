@@ -1,0 +1,46 @@
+/*
+ * $Id:
+ */
+
+/* Encoding: UTF-8 (No BOM)  Notation (in 5th position):
+     * Change, ! Fix, % Optimization, + Addition, - Removal, ; Comment
+   Entries may not always be in chronological/commit order.
+   See license at the end of file. */
+
+2020-04-29 22:55 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hc.prg
+    * now, use window functions for panels, command line, bottom bar, etc...,
+      changed some logic,
+      some functionality broken, work in progress but no so fast
+
+2020-04-15 23:31 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hc.prg
+    + adds characters that used in a command-line interface to
+      indicate readiness to accept commands
+
+2020-04-15 00:40 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hc.prg
+    * small fix for save/restore active panel
+
+2020-01-10 11:32 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  - hc.ppo
+    remove hc.ppo
+
+2020-01-10 11:32 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hb.prg
+    + save, restore active panel on startup
+
+2020-01-10 11:32 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hb.prg
+    * Translated comments from polish to english 
+
+2020-01-08 01:04 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * README.md
+    * deleted links to download file
+   
+2020-01-08 00:24 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * hb.prg
+    * Translated one comment from polish to english 
+
+2020-01-07 13:50 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  + Changelog.txt added
