@@ -9,7 +9,7 @@ Harbour Commander is a lightweight, cross-platform file manager with a dual-pane
 
 You will need Git version control software installed on your system and to issue this command (remove the --depth option to clone the complete history — useful for development):
 
-    git clone --depth=10 https://github.com/rjopek/harbour-commander
+    git clone --depth=10 https://github.com/omm/harbour-commander
 
 You can get subsequent updates using this command:
 
@@ -25,13 +25,8 @@ Linux
 - Not ready yet
 
 ## Windows 10
-![Windows](http://harbour.pl/img/hc_windows.png "Windows 10 desktop")
 
 ## Linux
-![GNU/Linux](http://harbour.pl/img/hc_linux.png "With family Linux Ubuntu desktop, based on GNOME")
-
-## Unix
-![Solaris](http://harbour.pl/img/hc_solaris.png "Solaris desktop GNOME")
 
 ## License
 Licensed under the [MIT](.github/LICENSE) License.

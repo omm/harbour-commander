@@ -81,7 +81,6 @@ PROCEDURE Main()
    hb_gtInfo( HB_GTI_RESIZEMODE, HB_GTI_RESIZEMODE_ROWS )
    hb_gtInfo( HB_GTI_WINTITLE, "Harbour Commander" )
 
-   /* hb_cwd () returns the full current working directory containing the disk and final path separator */
    /* restore configuration*/
    aConfig := hb_deserialize( hb_memoread( "hc.cfg" ) )
 
@@ -132,7 +131,7 @@ STATIC FUNCTION PanelInit( IdPanel )
    aInit[ _nLeft       ] := 0
    aInit[ _nBottom     ] := 0
    aInit[ _nRight      ] := 0
-   aInit[ _cCurrentDir ] := hb_cwd()
+   aInit[ _cCurrentDir ] := hb_cwd() /* hb_cwd () returns the full current working directory containing the disk and final path separator */
    aInit[ _aDirectory  ] := {}
    aInit[ _nRowBar     ] := 1
    aInit[ _nRowNo      ] := 0

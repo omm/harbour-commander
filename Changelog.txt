@@ -7,6 +7,10 @@
    Entries may not always be in chronological/commit order.
    See license at the end of file. */
 
+2020-04-30 11:53 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
+  * README.md
+    ! fix some links
+
 2020-04-30 01:56 UTC+0200 Oleksii Myronenko (m.oleksa/at/ukr.net)
   * Changlog.txt
     ! fix date in last entry
